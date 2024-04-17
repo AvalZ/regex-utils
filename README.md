@@ -15,6 +15,11 @@ Once you have this NFA, you can use all the features in this package. The `regex
 
 Generate strings that match the given regex, by performing a random walk over the generated NFA.
 
+```
+regex.from_string("[a-z]{5}").generate_sample()
+# Output: "xfkdy"
+```
+
 ## Intersection
 
 Intersect two regular expressions.
