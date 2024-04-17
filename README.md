@@ -52,4 +52,8 @@ Please open a issue if you find any specific bugs related to this feature 🙏
 
 ## To String
 
-Once you have the resulting NFA, you can get the original regex back in plain text, so that you can use it in other tools.
+Once you have the resulting NFA, you can get the regex back in plain text, so that you can use it in other tools.
+
+This could be useful for example if you wanted to get the intersection of two regex, or the negation of one, and put it in your application.
+
+An interesting use case is converting Lookaheads into a regex that can be used in non-PCRE compliant engines, such as the native ones in Go or Rust. This specific feature is also a work in progress for this package.
