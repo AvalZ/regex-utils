@@ -32,15 +32,30 @@ Finally, you can use intersection to generate strings of arbitrary length.
 For example, if you had the `ab+c*` regex, and you wanted a minimum length of 3 characters and a maximum length of 10 character for your string, you could intersect the regex like this:
 
 ```
-regex.intersect("ab+c*", ".{3,10}")
+r = regex.intersect("ab+c*", ".{3,10}")
 ```
-You could then generate strings using the resulting query.
 
-Please notice that Intersections could result in empty queries. For example, if you tried to intersect two regex with nothing in common, you would receive an empty regex as a result.
+You could then generate strings using the resulting regex:
 
 ```
-regex.intersect("[a-z]", "[^a-z]")
+r.generate_sample()
+# Returns: abc   -- Warning: this is not deterministic
 ```
+
+To get the final regex, you can also use the `to_string` function
+
+```
+regex.intersect("a*b*", "\w{5}").to_string()
+# Returns: '(?:(?:(?:(?:[ab]b|aa)b|aaa)b|aaaa)b|aaaaa)'
+```
+
+Please notice that Intersections could result in empty regex. For example, if you tried to intersect two regex with nothing in common, you would receive an empty regex as a result.
+
+```
+regex.intersect("[a-z]", "[^a-z]").to_string()
+# Returns: ''
+```
+
 
 ## Negation (experimental)
 
@@ -54,6 +69,18 @@ Please open a issue if you find any specific bugs related to this feature 🙏
 
 Once you have the resulting NFA, you can get the regex back in plain text, so that you can use it in other tools.
 
+
 This could be useful for example if you wanted to get the intersection of two regex, or the negation of one, and put it in your application.
 
+```
+regex.intersect("a*b*", "\w{5}").to_string()
+# Returns: '(?:(?:(?:(?:[ab]b|aa)b|aaa)b|aaaa)b|aaaaa)'
+```
+
 An interesting use case is converting Lookaheads into a regex that can be used in non-PCRE compliant engines, such as the native ones in Go or Rust. This specific feature is also a work in progress for this package.
+For example, if you wanted strings that match the `(?!abc).*` regex, you could write it like this:
+
+```
+regex.negate("abc").to_string()
+# Returns: '(?:(?:[^a]|a(?:[^b]|b[^c])))(?:\\.)*|(?:ab?)?'
+```
