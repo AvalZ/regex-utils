@@ -6,7 +6,7 @@ import sre_parse
 import graphviz
 from graphviz.quoting import *
 
-import nfautils
+from regex_utils import nfautils
 
 
 class State:
@@ -21,7 +21,9 @@ class State:
 
     def is_dead_end(self):
         return not self.is_end_state and (
-                len(self.out_transitions) == 0 or all(t.is_self_loop() for t in self.out_transitions))
+            len(self.out_transitions) == 0
+            or all(t.is_self_loop() for t in self.out_transitions)
+        )
 
     def get_all_outgoing_symbols(self):
         symbols = set(t.symbol for t in self.out_transitions)
@@ -29,7 +31,6 @@ class State:
         states = {self}
 
         while True:
-
             previous_states = states.copy()
 
             for t in self.out_transitions:
@@ -56,22 +57,21 @@ class Transition:
         return self.from_state == self.to_state
 
     def is_epsilon_transition(self):
-        return self.symbol == ''
+        return self.symbol == ""
 
 
 ENUM_LOOKAROUND_TYPE = {
     sre_constants.ASSERT: "POSITIVE",
-    sre_constants.ASSERT_NOT: "NEGATIVE"
+    sre_constants.ASSERT_NOT: "NEGATIVE",
 }
 
-ENUM_LOOKAROUND_DIRECTION = {
-    -1: "BEHIND",
-    1: "AHEAD"
-}
+ENUM_LOOKAROUND_DIRECTION = {-1: "BEHIND", 1: "AHEAD"}
 
 
 class Lookaround:
-    def __init__(self, from_state, lookaround_type, lookaround_direction, lookaround_pattern):
+    def __init__(
+        self, from_state, lookaround_type, lookaround_direction, lookaround_pattern
+    ):
         self.from_state = from_state
         self.lookaround_type = lookaround_type
         self.lookaround_direction = lookaround_direction
@@ -85,7 +85,6 @@ class Boundary:
 
 
 class NFA:
-
     @staticmethod
     def from_regex(regex):
         parsed = sre_parse.parse(regex)
@@ -94,7 +93,7 @@ class NFA:
     @staticmethod
     def from_regex_pattern(regex: sre_parse.SubPattern):
         if 0 == len(regex.data):
-            raise ValueError('ERROR: regex is empty')
+            raise ValueError("ERROR: regex is empty")
         elif 1 == len(regex.data):
             return NFA.sre_pattern_to_nfa(regex[0])
         else:
@@ -110,24 +109,34 @@ class NFA:
             return NFA().append_transition(chr(node_value))
         elif sre_constants.NOT_LITERAL == node_type:  # [^a]
             positive_range = NFA().append_transition(chr(node_value))
-            return positive_range.negate_range_transition_between(positive_range.start_state,
-                                                                  positive_range.get_end_states()[0])
-        elif sre_constants.RANGE == node_type:  # # [abc], but also (a|b|c) is translated to this
+            return positive_range.negate_range_transition_between(
+                positive_range.start_state, positive_range.get_end_states()[0]
+            )
+        elif (
+            sre_constants.RANGE == node_type
+        ):  # # [abc], but also (a|b|c) is translated to this
             low, high = node_value
-            return NFA.alternate(*[NFA().append_transition(chr(i)) for i in range(low, high + 1)])
+            return NFA.alternate(
+                *[NFA().append_transition(chr(i)) for i in range(low, high + 1)]
+            )
         elif sre_constants.SUBPATTERN == node_type:  # (a)
             # FIXME: we need to address the usage of backreferences and captured groups, currently ignored
             return NFA.from_regex_pattern(node_value[-1])
         # FIXME: min_repeat = max_repeat is very very very wrong and could lead to unexpected results
         # Using it as a temporary workaround to start testing
-        elif sre_constants.MAX_REPEAT == node_type or sre_constants.MIN_REPEAT == node_type:
+        elif (
+            sre_constants.MAX_REPEAT == node_type
+            or sre_constants.MIN_REPEAT == node_type
+        ):
             low, high, value = node_value
             if (0, 1) == (low, high):  # a?
                 return NFA.from_regex_pattern(value).make_skippable()
             elif (0, sre_constants.MAXREPEAT) == (low, high):  # a*
                 return NFA.from_regex_pattern(value).make_kleene()
             elif (1, sre_constants.MAXREPEAT) == (low, high):  # a+
-                return NFA.from_regex_pattern(value).concatenate(NFA.from_regex_pattern(value).make_kleene())
+                return NFA.from_regex_pattern(value).concatenate(
+                    NFA.from_regex_pattern(value).make_kleene()
+                )
             else:  # a{3,5}, a{3}
                 nfa = NFA()
                 for _ in range(low):
@@ -141,15 +150,24 @@ class NFA:
         elif sre_constants.BRANCH == node_type:  # ab|cd
             _, value = node_value
             return NFA.alternate(*[NFA.from_regex_pattern(v) for v in value])
-        elif sre_constants.IN == node_type:  # [abc], but also (a|b|c) is translated to this
+        elif (
+            sre_constants.IN == node_type
+        ):  # [abc], but also (a|b|c) is translated to this
             first_subnode_type, _ = node_value[0]
             if sre_constants.NEGATE == first_subnode_type:  # [^abc]
                 positive_range = NFA.alternate(
-                    *[NFA.sre_pattern_to_nfa(subpattern) for subpattern in node_value[1:]]).simplify()
-                return positive_range.negate_range_transition_between(positive_range.start_state,
-                                                                      positive_range.get_end_states()[0])
+                    *[
+                        NFA.sre_pattern_to_nfa(subpattern)
+                        for subpattern in node_value[1:]
+                    ]
+                ).simplify()
+                return positive_range.negate_range_transition_between(
+                    positive_range.start_state, positive_range.get_end_states()[0]
+                )
             else:
-                return NFA.alternate(*[NFA.sre_pattern_to_nfa(subpattern) for subpattern in node_value]).simplify()
+                return NFA.alternate(
+                    *[NFA.sre_pattern_to_nfa(subpattern) for subpattern in node_value]
+                ).simplify()
         elif sre_constants.ANY == node_type:  # .
             return NFA.alternate(*[NFA().append_transition(c) for c in NFA.alphabet])
         elif sre_constants.CATEGORY == node_type:  # \d, \s, \w
@@ -166,14 +184,23 @@ class NFA:
             elif sre_constants.CATEGORY_NOT_WORD == node_value:  # \W
                 return NFA.from_regex("[^a-zA-Z0-9_]")
             else:
-                raise NotImplementedError(f'ERROR: regex category {node_value} not implemented')
+                raise NotImplementedError(
+                    f"ERROR: regex category {node_value} not implemented"
+                )
         # Lookarounds
-        elif node_type in [sre_constants.ASSERT_NOT, sre_constants.ASSERT]:  # (?!abc), (?<!abc), (?=abc), (?<=abc)
+        elif node_type in [
+            sre_constants.ASSERT_NOT,
+            sre_constants.ASSERT,
+        ]:  # (?!abc), (?<!abc), (?=abc), (?<=abc)
             direction, pattern = node_value
             base_nfa = NFA()
             lookaround_nfa = NFA.from_regex_pattern(pattern)
-            lookaround = Lookaround(base_nfa.start_state, ENUM_LOOKAROUND_TYPE[node_type],
-                                    ENUM_LOOKAROUND_DIRECTION[direction], lookaround_nfa)
+            lookaround = Lookaround(
+                base_nfa.start_state,
+                ENUM_LOOKAROUND_TYPE[node_type],
+                ENUM_LOOKAROUND_DIRECTION[direction],
+                lookaround_nfa,
+            )
             base_nfa.lookarounds.append(lookaround)
             return base_nfa
         # Boundaries
@@ -185,7 +212,9 @@ class NFA:
             return base_nfa
 
         else:
-            raise NotImplementedError(f'ERROR: regex construct {pattern} not implemented')
+            raise NotImplementedError(
+                f"ERROR: regex construct {pattern} not implemented"
+            )
 
     @staticmethod
     def alternate(*nfas):
@@ -257,7 +286,9 @@ class NFA:
         nfa1.simplify()
         nfa2.simplify()
         nfa = NFA()
-        nfa.start_state.is_end_state = (nfa1.start_state.is_end_state and nfa2.start_state.is_end_state)
+        nfa.start_state.is_end_state = (
+            nfa1.start_state.is_end_state and nfa2.start_state.is_end_state
+        )
 
         synchronized_states = {(nfa1.start_state, nfa2.start_state): nfa.start_state}
 
@@ -272,9 +303,12 @@ class NFA:
                     if t.is_epsilon_transition():
                         if (s1, t.to_state) not in synchronized_states:
                             synchronized_states[(s1, t.to_state)] = State(
-                                end_state=(s1.is_end_state and t.to_state.is_end_state))
+                                end_state=(s1.is_end_state and t.to_state.is_end_state)
+                            )
                             nfa.states.append(synchronized_states[(s1, t.to_state)])
-                        nfa.set_epsilon_transition(sync_state, synchronized_states[(s1, t.to_state)])
+                        nfa.set_epsilon_transition(
+                            sync_state, synchronized_states[(s1, t.to_state)]
+                        )
 
                 for t in s1.out_transitions:
                     # If there's an epsilon transition, consume it "for free"
@@ -282,20 +316,34 @@ class NFA:
                     if t.is_epsilon_transition():
                         if (t.to_state, s2) not in synchronized_states:
                             synchronized_states[(t.to_state, s2)] = State(
-                                end_state=(t.to_state.is_end_state and s2.is_end_state))
+                                end_state=(t.to_state.is_end_state and s2.is_end_state)
+                            )
                             nfa.states.append(synchronized_states[(t.to_state, s2)])
-                        nfa.set_epsilon_transition(sync_state, synchronized_states[(t.to_state, s2)])
+                        nfa.set_epsilon_transition(
+                            sync_state, synchronized_states[(t.to_state, s2)]
+                        )
 
                     # Otherwise, check if the other nfa has transitions with the same symbol
                     # If it does, create a new synchronized state for each to_state of each transition
                     # And add a transition to the new synchronized state
-                    for t2 in filter(lambda t2: t2.symbol == t.symbol, s2.out_transitions):
+                    for t2 in filter(
+                        lambda t2: t2.symbol == t.symbol, s2.out_transitions
+                    ):
                         if (t.to_state, t2.to_state) not in synchronized_states:
                             synchronized_states[(t.to_state, t2.to_state)] = State(
-                                end_state=(t.to_state.is_end_state and t2.to_state.is_end_state))
-                            nfa.states.append(synchronized_states[(t.to_state, t2.to_state)])
+                                end_state=(
+                                    t.to_state.is_end_state and t2.to_state.is_end_state
+                                )
+                            )
+                            nfa.states.append(
+                                synchronized_states[(t.to_state, t2.to_state)]
+                            )
                         # print("Adding transition", t.symbol, "from", sync_state.id, "to", synchronized_states[(t.to_state, t2.to_state)].id)
-                        nfa.set_transition(t.symbol, sync_state, synchronized_states[(t.to_state, t2.to_state)])
+                        nfa.set_transition(
+                            t.symbol,
+                            sync_state,
+                            synchronized_states[(t.to_state, t2.to_state)],
+                        )
 
             if len(synchronized_states) == len(previous_synchronized_states):
                 break
@@ -303,7 +351,6 @@ class NFA:
         return nfa
 
     def concatenate(self, nfa, on_states=None):
-
         if on_states is None:
             end_states = self.get_end_states()
         else:
@@ -345,7 +392,7 @@ class NFA:
         else:
             return None
 
-    def walk(self, continue_after_end_state=.0):
+    def walk(self, continue_after_end_state=0.0):
         # TODO: add new walk techniques, e.g., weight walk on transitions that were already taken (to avoid being stuck in loops)
         self.reset()
 
@@ -354,9 +401,11 @@ class NFA:
             symbols.append(self.step())
             if self.current_state.is_end_state:
                 # Avoid generating a random number if continue_after_end_state is set to 0
-                if (continue_after_end_state == .0
-                        or random.random() > continue_after_end_state
-                        or not self.current_state.out_transitions):
+                if (
+                    continue_after_end_state == 0.0
+                    or random.random() > continue_after_end_state
+                    or not self.current_state.out_transitions
+                ):
                     break
 
         return "".join(symbols)
@@ -382,7 +431,13 @@ class NFA:
     def set_transition(self, symbol, from_state, to_state):
         # check if there's another transition between these two states with the same symbol
         existing_transition = next(
-            (t for t in from_state.out_transitions if t.symbol == symbol and t.to_state == to_state), None)
+            (
+                t
+                for t in from_state.out_transitions
+                if t.symbol == symbol and t.to_state == to_state
+            ),
+            None,
+        )
         if existing_transition:
             return existing_transition
 
@@ -394,7 +449,7 @@ class NFA:
         return t
 
     def set_epsilon_transition(self, from_state, to_state):
-        return self.set_transition('', from_state, to_state)
+        return self.set_transition("", from_state, to_state)
 
     def make_skippable(self):
         for s in filter(lambda x: x.is_end_state, self.states):
@@ -438,8 +493,12 @@ class NFA:
 
         # Update lookaheads and boundaries on removed state
 
-        lookaheads_on_removed_state = list(filter(lambda x: x.from_state == removed_state, self.lookarounds))
-        boundaries_on_removed_state = list(filter(lambda x: x.from_state == removed_state, self.boundaries))
+        lookaheads_on_removed_state = list(
+            filter(lambda x: x.from_state == removed_state, self.lookarounds)
+        )
+        boundaries_on_removed_state = list(
+            filter(lambda x: x.from_state == removed_state, self.boundaries)
+        )
 
         for l in lookaheads_on_removed_state:
             l.from_state = merged_state
@@ -464,8 +523,14 @@ class NFA:
             # Check if there's another identical transition
             # With the same symbol, to_state and from_state
             # print("for t in removed_state.out_transitions:")
-            if any(filter(lambda x: x.symbol == t.symbol and x.to_state == t.to_state and x.from_state == merged_state,
-                          merged_state.out_transitions)):
+            if any(
+                filter(
+                    lambda x: x.symbol == t.symbol
+                    and x.to_state == t.to_state
+                    and x.from_state == merged_state,
+                    merged_state.out_transitions,
+                )
+            ):
                 self.remove_transition(t)
                 continue
             t.from_state = merged_state
@@ -475,8 +540,14 @@ class NFA:
         for t in removed_state.in_transitions:
             # Check if there's another identical transition
             # With the same symbol, to_state and from_state
-            if any(filter(lambda x: x.symbol == t.symbol and x.to_state == t.to_state and x.from_state == merged_state,
-                          merged_state.in_transitions)):
+            if any(
+                filter(
+                    lambda x: x.symbol == t.symbol
+                    and x.to_state == t.to_state
+                    and x.from_state == merged_state,
+                    merged_state.in_transitions,
+                )
+            ):
                 try:
                     self.remove_transition(t)
                 except ValueError:
@@ -489,7 +560,7 @@ class NFA:
         # Notice that, due to the above for loop
         # transitions between from_state and to_state are now self-loops
         for t in merged_state.out_transitions:
-            if t.from_state == t.to_state and t.symbol == '':
+            if t.from_state == t.to_state and t.symbol == "":
                 self.remove_transition(t)
 
         if removed_state.is_end_state:
@@ -498,7 +569,9 @@ class NFA:
         if removed_state is self.start_state:
             self.start_state = merged_state
 
-        lookaheads_on_removed_state = list(filter(lambda x: x.from_state == removed_state, self.lookarounds))
+        lookaheads_on_removed_state = list(
+            filter(lambda x: x.from_state == removed_state, self.lookarounds)
+        )
         for l in lookaheads_on_removed_state:
             l.from_state = merged_state
 
@@ -525,7 +598,9 @@ class NFA:
         while True:
             previous_states = len(self.states)
             previous_transitions = len(self.transitions)
-            previous_end_states = len(list(filter(lambda x: x.is_end_state, self.states)))
+            previous_end_states = len(
+                list(filter(lambda x: x.is_end_state, self.states))
+            )
 
             self.remove_useless_epsilon_transitions()
             self.remove_two_way_epsilon_transitions()
@@ -538,11 +613,11 @@ class NFA:
             self.propagate_end_states()
 
             rounds += 1
-            if (rounds > budget or
-                    (previous_states == len(self.states)
-                     and previous_transitions == len(self.transitions)
-                     and previous_end_states == len(list(filter(lambda x: x.is_end_state, self.states)))
-                    )
+            if rounds > budget or (
+                previous_states == len(self.states)
+                and previous_transitions == len(self.transitions)
+                and previous_end_states
+                == len(list(filter(lambda x: x.is_end_state, self.states)))
             ):
                 if rounds > budget:
                     print("Simplify reached budget")
@@ -556,14 +631,22 @@ class NFA:
         # If there is an epsilon transition from a state to an end state,
         # mark the state as an end state
         for s in self.states:
-            if any(filter(lambda x: x.is_epsilon_transition() and x.to_state.is_end_state, s.out_transitions)):
+            if any(
+                filter(
+                    lambda x: x.is_epsilon_transition() and x.to_state.is_end_state,
+                    s.out_transitions,
+                )
+            ):
                 s.is_end_state = True
 
     def remove_dead_end_transitions(self):
         # Dead transition = a transition that
         # Has no from_state OR has no to_state
-        dead_transitions = [t for t in self.transitions if
-                            t.from_state not in self.states or t.to_state not in self.states]
+        dead_transitions = [
+            t
+            for t in self.transitions
+            if t.from_state not in self.states or t.to_state not in self.states
+        ]
         for t in dead_transitions:
             self.remove_transition(t)
 
@@ -575,7 +658,11 @@ class NFA:
             for t in s.out_transitions:
                 if t.is_epsilon_transition() and not t.is_self_loop():
                     for t2 in t.to_state.out_transitions:
-                        if t2.to_state == s and t2.is_epsilon_transition() and not t2.is_self_loop():
+                        if (
+                            t2.to_state == s
+                            and t2.is_epsilon_transition()
+                            and not t2.is_self_loop()
+                        ):
                             to_merge_states.append((t.from_state, t.to_state))
 
         for from_state, to_state in to_merge_states:
@@ -585,9 +672,12 @@ class NFA:
 
     def remove_useless_epsilon_transitions(self):
         for t in self.transitions:
-            if t.symbol == '':
+            if t.symbol == "":
                 # If there are no other transitions between from_state and to_state
-                if len(t.from_state.out_transitions) == 1 or len(t.to_state.in_transitions) == 1:
+                if (
+                    len(t.from_state.out_transitions) == 1
+                    or len(t.to_state.in_transitions) == 1
+                ):
                     # Or if there is another opposite epsilon transition
                     self.force_merge_states(t.from_state, t.to_state)
 
@@ -625,20 +715,40 @@ class NFA:
         for s in self.states:
             # Group transitions by symbol and to_state
             for t in s.out_transitions:
-                duplicate_transitions = [t2 for t2 in s.out_transitions if
-                                         t2.symbol == t.symbol and t2.to_state == t.to_state]
+                duplicate_transitions = [
+                    t2
+                    for t2 in s.out_transitions
+                    if t2.symbol == t.symbol and t2.to_state == t.to_state
+                ]
                 for dt in duplicate_transitions[1:]:
                     self.remove_transition(dt)
 
     def negate_range_transition_between(self, from_state, to_state):
         # There must be a transition between the two states
-        assert any(filter(lambda x: x.from_state == from_state and x.to_state == to_state, self.transitions))
+        assert any(
+            filter(
+                lambda x: x.from_state == from_state and x.to_state == to_state,
+                self.transitions,
+            )
+        )
         # All transitions must be 1 char only, or epsilon transitions
-        assert all([len(t.symbol) == 1 or t.is_epsilon_transition() for t in
-                    filter(lambda x: x.from_state == from_state and x.to_state == to_state, self.transitions)])
+        assert all(
+            [
+                len(t.symbol) == 1 or t.is_epsilon_transition()
+                for t in filter(
+                    lambda x: x.from_state == from_state and x.to_state == to_state,
+                    self.transitions,
+                )
+            ]
+        )
 
         # Get all transitions between the two states
-        transitions = list(filter(lambda x: x.from_state == from_state and x.to_state == to_state, self.transitions))
+        transitions = list(
+            filter(
+                lambda x: x.from_state == from_state and x.to_state == to_state,
+                self.transitions,
+            )
+        )
         # Get all symbols in the transitions
         symbols = [t.symbol for t in transitions]
         # Get all symbols not in the transitions
@@ -688,14 +798,17 @@ class NFA:
             self.simplify()
 
         dot = graphviz.Digraph()
-        dot.attr(rankdir='LR')
+        dot.attr(rankdir="LR")
         for s in self.states:
-            dot.node(str(s.id),
-                     # Make the circle double if endstate
-                     shape='doublecircle' if s.is_end_state else 'circle',
-                     # make the circle red if there's a lookaround on this state
-                     color='red' if any(filter(lambda x: x.from_state == s, self.lookarounds)) else 'black'
-                     )
+            dot.node(
+                str(s.id),
+                # Make the circle double if endstate
+                shape="doublecircle" if s.is_end_state else "circle",
+                # make the circle red if there's a lookaround on this state
+                color="red"
+                if any(filter(lambda x: x.from_state == s, self.lookarounds))
+                else "black",
+            )
 
         # Group transitions by from_state and to_state
         # If from_state and to_state are the same for multiple transitions,
@@ -707,14 +820,16 @@ class NFA:
                 continue
             # print("- Drawing round for transition ", t.from_state.id, t.to_state.id, t.symbol)
             symbols = set()
-            same_transitions = self._get_parallel_transitions(t, get_epsilon_transitions=True)
+            same_transitions = self._get_parallel_transitions(
+                t, get_epsilon_transitions=True
+            )
             if same_transitions:
                 symbols.update(t.symbol for t in same_transitions)
 
-            if '' in symbols:
+            if "" in symbols:
                 # print("Creating Transition", t.from_state.id, t.to_state.id, "ε")
                 dot.edge(str(t.from_state.id), str(t.to_state.id), label="ε")
-                symbols = symbols - {''}
+                symbols = symbols - {""}
 
             if t.symbol:
                 # print("Add symbol", t.symbol)
@@ -724,14 +839,18 @@ class NFA:
 
             if label:
                 # ("Creating transition", t.from_state.id, t.to_state.id, repr(label))
-                dot.edge(str(t.from_state.id), str(t.to_state.id), label=escape(repr(label))[1:-1])
+                dot.edge(
+                    str(t.from_state.id),
+                    str(t.to_state.id),
+                    label=escape(repr(label))[1:-1],
+                )
 
             for st in same_transitions:
                 # print("Removing transition", st.from_state.id, st.to_state.id, st.symbol)
                 excluded_transitions.append(st)
 
         # Workaround to mark start state
-        dot.node("", shape='none', width='0')
+        dot.node("", shape="none", width="0")
         dot.edge("", str(self.start_state.id))
 
         dot.render(view=view)
@@ -775,16 +894,28 @@ class NFA:
         self.start_state = start_state
         return self
 
-    def _get_transitions_between_states(self, from_state, to_state, get_epsilon_transitions=False):
-        transitions = list(filter(lambda x: x.from_state == from_state and x.to_state == to_state, self.transitions))
+    def _get_transitions_between_states(
+        self, from_state, to_state, get_epsilon_transitions=False
+    ):
+        transitions = list(
+            filter(
+                lambda x: x.from_state == from_state and x.to_state == to_state,
+                self.transitions,
+            )
+        )
         if not get_epsilon_transitions:
-            transitions = list(filter(lambda x: not x.is_epsilon_transition(), transitions))
+            transitions = list(
+                filter(lambda x: not x.is_epsilon_transition(), transitions)
+            )
 
         return transitions
 
     def _get_parallel_transitions(self, transition, get_epsilon_transitions=False):
         return list(
-            self._get_transitions_between_states(transition.from_state, transition.to_state, get_epsilon_transitions))
+            self._get_transitions_between_states(
+                transition.from_state, transition.to_state, get_epsilon_transitions
+            )
+        )
 
     def _merge_parallel_transitions(self):
         """
@@ -796,7 +927,9 @@ class NFA:
         # Merge parallel transitions
         for s in self.states:
             for s2 in [t.to_state for t in s.out_transitions]:
-                transitions = self._get_transitions_between_states(s, s2, get_epsilon_transitions=True)
+                transitions = self._get_transitions_between_states(
+                    s, s2, get_epsilon_transitions=True
+                )
 
                 if transitions:
                     for t in transitions:
@@ -806,12 +939,14 @@ class NFA:
                     symbols = set(t.symbol for t in transitions)
                     # print("Symbols", symbols)
                     if all(len(symbol) == 1 or not symbol for symbol in symbols):
-                        label = nfautils.range_label(symbols - {''})
+                        label = nfautils.range_label(symbols - {""})
                     else:
                         # FIXME this gives wrong results due to parenthesis, might need better handling
-                        label = "|".join(sorted([t.symbol for t in transitions if t.symbol != '']))
+                        label = "|".join(
+                            sorted([t.symbol for t in transitions if t.symbol != ""])
+                        )
 
-                    if '' in symbols and symbols != {''}:
+                    if "" in symbols and symbols != {""}:
                         if len(label) == 1:
                             label += "?"
                         else:
@@ -837,9 +972,17 @@ class NFA:
         while len(copy_nfa.states) > 2:
             # find a state to eliminate
             # sort all states by the number of transitions
-            sorted_states = sorted(copy_nfa.states, key=lambda x: len(x.out_transitions) + len(x.in_transitions))
+            sorted_states = sorted(
+                copy_nfa.states,
+                key=lambda x: len(x.out_transitions) + len(x.in_transitions),
+            )
             # the state should not be the start state or the end state
-            state_to_eliminate = next(filter(lambda x: not x.is_end_state and x != copy_nfa.start_state, sorted_states))
+            state_to_eliminate = next(
+                filter(
+                    lambda x: not x.is_end_state and x != copy_nfa.start_state,
+                    sorted_states,
+                )
+            )
 
             # print("Eliminating state", state_to_eliminate.id, "with", len(state_to_eliminate.out_transitions), "out transitions", "and", len(state_to_eliminate.in_transitions), "in transitions")
             # print("\tOut transitions", [(t.symbol, t.to_state.id) for t in state_to_eliminate.out_transitions])
@@ -854,7 +997,9 @@ class NFA:
             self_loop_transition_label = ""
             # Check if the state to eliminate has a self-loop
             if state_to_eliminate in out_states and state_to_eliminate in in_states:
-                self_loop_transition = next(t for t in out_transitions if t.to_state == state_to_eliminate)
+                self_loop_transition = next(
+                    t for t in out_transitions if t.to_state == state_to_eliminate
+                )
                 # Get symbol of self-loop transition
                 self_loop_transition_label = self_loop_transition.symbol
                 # if the symbol has a length > 1, we need to add parentheses
@@ -872,14 +1017,19 @@ class NFA:
                         # Create a new transition
                         # print("Creating transition", t2.symbol + self_loop_transition_label + t.symbol, "from", t2.from_state.id, "to", t.to_state.id)
                         # FIXME this is super hacky, it could break in the future
-                        first_transition_label = f"(?:{t2.symbol})" if '|' in t2.symbol else t2.symbol
-                        second_transition_label = f"(?:{t.symbol})" if '|' in t.symbol else t.symbol
+                        first_transition_label = (
+                            f"(?:{t2.symbol})" if "|" in t2.symbol else t2.symbol
+                        )
+                        second_transition_label = (
+                            f"(?:{t.symbol})" if "|" in t.symbol else t.symbol
+                        )
                         copy_nfa.set_transition(
-                            first_transition_label +
-                            self_loop_transition_label +
-                            second_transition_label,
+                            first_transition_label
+                            + self_loop_transition_label
+                            + second_transition_label,
                             t2.from_state,
-                            t.to_state)
+                            t.to_state,
+                        )
 
             # Remove old transitions
             for t in in_transitions + out_transitions:
@@ -895,7 +1045,6 @@ class NFA:
 
 
 if __name__ == "__main__":
-
     regex1 = "ab[a-z]"
     regex2 = "abc*"
 

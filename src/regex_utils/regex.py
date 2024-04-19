@@ -1,4 +1,4 @@
-from nfa import NFA
+from regex_utils.nfa import NFA
 
 
 class Regex:
@@ -107,11 +107,7 @@ def intersect(*regexes):
 
 
 if __name__ == "__main__":
-    r = intersect(
-        "abc*d",
-        "\w{5}",
-        "[a-f]{5}"
-    )
+    r = intersect("abc*d", "\w{5}", "[a-f]{5}")
 
     r = negate(r)
     print(r.to_string())
