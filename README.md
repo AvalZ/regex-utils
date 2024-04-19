@@ -1,6 +1,8 @@
 # Regex Utils
 A set of utils to work with Regular Expressions in Python
 
+WARNING: most functions are still under development, please [report any issues](https://github.com/AvalZ/regex-utils/issues) you find, or feel free to contribute!
+
 ## Main Features
 - Generate strings that match a given regex
 - Intersect two regular expressions
@@ -9,7 +11,25 @@ A set of utils to work with Regular Expressions in Python
 
 Use Python native `sre_parse` to parse a regex, then convert it into a [Nondeterministic Finite Automaton](https://en.wikipedia.org/wiki/Nondeterministic_finite_automaton)
 
-Once you have this NFA, you can use all the features in this package. The `regex` package offers an abstraction for NFA-based operations.
+Once you have this NFA, you can use all the features in this package. The `regex` module offers an abstraction for NFA-based operations.
+
+## Getting Started
+
+First of all, install the package:
+
+```
+pip install regex-utils
+```
+
+Then, you can use all functions in the `regex` module by importing it:
+
+```
+from regex_utils import regex
+
+
+print(regex.from_string("abc").generate_sample())
+# Output: "abc"
+```
 
 ## String Generation
 
