@@ -107,11 +107,12 @@ def intersect(*regexes):
 
 
 if __name__ == "__main__":
-    r = intersect("abc*d", "\w{5}", "[a-f]{5}")
+    r = intersect(".{10}", "a*b*|qualcosa+")
 
     r = negate(r)
+    r = intersect(r, "[a-b]{10}")
     print(r.to_string())
     print(r.to_dot(view=True))
 
-    print(r.generate_sample())
-    print(r.generate_samples(5))
+    for _ in range(10):
+        print(r.generate_sample())
