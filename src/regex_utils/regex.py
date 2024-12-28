@@ -8,8 +8,12 @@ class Regex:
 
         if regex_string and not nfa:
             self.nfa = NFA.from_regex(regex_string).simplify()
-        elif nfa and not regex_string:
+
+        if nfa and not regex_string:
             self.regex_string = nfa.to_regex()
+
+        if self.nfa.boundaries:
+            self.nfa.merge_boundaries().simplify()
 
     def __str__(self):
         return self.to_string()
@@ -107,12 +111,28 @@ def intersect(*regexes):
 
 
 if __name__ == "__main__":
-    r = intersect(".{10}", "a*b*|qualcosa+")
+    regexes = [
+        r".+\ba\b.+",
+        r".+\b0oa\w{14}417\b.+",
+    ]
 
-    r = negate(r)
-    r = intersect(r, "[a-b]{10}")
-    print(r.to_string())
-    print(r.to_dot(view=True))
+    regexes = [from_string(r) for r in regexes]
 
-    for _ in range(10):
-        print(r.generate_sample())
+    for r in regexes:
+        print("Samples for", r.to_string())
+        for _ in range(10):
+            print(r.generate_sample())
+
+
+def main2():
+    r = from_string("[ab]*(qualcosa|norme)boh")
+    r2 = from_string(".{30}")
+    # (?=abcd)(?=.*z$)[a-z]*
+    # (?!abcd)[a-z]*
+    # abcd[a-z]{26}
+
+    r_intersect = intersect("[a-z]{30}", negate("abcd"))
+
+    print(r_intersect.generate_sample())
+
+    print(r_intersect.to_string())

@@ -1,26 +1,27 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
+[tool.poetry]
 name = "regex-utils"
 version = "0.2.0"
-authors = [
-  { name="Andrea Valenza", email="avalenza89@gmail.com" },
-]
 description = "Utilities for Regular Expressions in Python"
+authors = ["Andrea Valenza <avalenza89@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.8"
+homepage = "https://github.com/avalz/regex-utils"
+repository = "https://github.com/avalz/regex-utils"
+documentation = "https://github.com/avalz/regex-utils"
+keywords = ["regex", "utilities"]
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "graphviz",
-    "more_itertools",
-]
 
-[project.urls]
-Homepage = "https://github.com/avalz/regex-utils"
-Issues = "https://github.com/avalz/regex-utils/issues"
+[tool.poetry.dependencies]
+python = ">=3.11"
+graphviz = "*"
+more_itertools = "*"
+pytest = "^8.3.4"
+black = "^24.10.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
