@@ -111,6 +111,22 @@ def intersect(*regexes):
 
 
 if __name__ == "__main__":
+    r1 = from_string(r".*[ab]*(qualcosa|norme)boh")
+    r2 = from_string(".{30}")
+    # (?=abcd)(?=.*z$)[a-z]*
+    # (?!abcd)[a-z]*
+    # abcd[a-z]{26}
+
+    r_intersect = intersect(r1, r2)
+
+    print(r_intersect.generate_sample())
+
+    print(r_intersect.to_string())
+
+    r_intersect.to_dot(view=True)
+
+
+def main2():
     regexes = [
         r".+\ba\b.+",
         r".+\b0oa\w{14}417\b.+",
@@ -122,17 +138,3 @@ if __name__ == "__main__":
         print("Samples for", r.to_string())
         for _ in range(10):
             print(r.generate_sample())
-
-
-def main2():
-    r = from_string("[ab]*(qualcosa|norme)boh")
-    r2 = from_string(".{30}")
-    # (?=abcd)(?=.*z$)[a-z]*
-    # (?!abcd)[a-z]*
-    # abcd[a-z]{26}
-
-    r_intersect = intersect("[a-z]{30}", negate("abcd"))
-
-    print(r_intersect.generate_sample())
-
-    print(r_intersect.to_string())
