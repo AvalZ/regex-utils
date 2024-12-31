@@ -103,27 +103,33 @@ def intersect(*regexes):
     regexes = [Regex(r) if type(r) == str else r for r in regexes]
     nfas = [r.nfa for r in regexes]
 
-    intersection = nfas[0].simplify()
+    intersection = nfas[0]
     for nfa in nfas[1:]:
-        intersection = NFA.intersect(intersection, nfa).simplify()
+        intersection.simplify()
+        nfa.simplify()
+        intersection = NFA.intersect(intersection, nfa)
+
+    intersection.simplify()
 
     return Regex(nfa=intersection)
 
 
 if __name__ == "__main__":
-    r1 = from_string(r".*[ab]*(qualcosa|norme)boh")
-    r2 = from_string(".{30}")
+    r1 = from_string(r"[ab].(qualcosa|norme)boh")
+    r2 = from_string(r"[ab].*\W(qualcosa|norme)boh")
+    # r1 = from_string(r".*z[a-z]bcd")
+    # r2 = from_string(r".*zabc[a-z]")
     # (?=abcd)(?=.*z$)[a-z]*
     # (?!abcd)[a-z]*
     # abcd[a-z]{26}
 
     r_intersect = intersect(r1, r2)
 
+    r_intersect.to_dot(view=True)
+
     print(r_intersect.generate_sample())
 
     print(r_intersect.to_string())
-
-    r_intersect.to_dot(view=True)
 
 
 def main2():
