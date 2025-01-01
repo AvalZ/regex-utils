@@ -7,7 +7,7 @@ from enum import StrEnum
 import graphviz
 from graphviz.quoting import *
 
-from regex_utils import nfautils
+from regex_utils.nfa import utils
 from collections import deque
 
 
@@ -57,7 +57,7 @@ class State:
         return symbols
 
     def complement_outbound_transitions(self):
-        return set(NFA.alphabet) - self.get_all_outgoing_symbols()
+        return set(self.alphabet) - self.get_all_outgoing_symbols()
 
     def get_transitions(self, direction=Direction.FORWARD, to_state=None, symbol=None):
         transitions = self._get_all_transitions_based_on_direction(direction)
@@ -68,7 +68,7 @@ class State:
             transitions = list(filter(lambda x: x.symbol == symbol, transitions))
 
         return transitions
-    
+
     def _get_all_transitions_based_on_direction(self, direction):
         transitions = []
         if direction == Direction.FORWARD:
@@ -96,8 +96,8 @@ class SynchronizedState(State):
 
     def __init__(self, s1, s2, end_state=None, id=None):
         super().__init__(
-            end_state=end_state or (s1.is_end_state and s2.is_end_state),
-            id=id)
+            end_state=end_state or (s1.is_end_state and s2.is_end_state), id=id
+        )
         self.states = (s1, s2)
 
     def __str__(self) -> str:
@@ -181,223 +181,39 @@ class Boundary:
 
 
 class NFA:
-    @staticmethod
-    def from_regex(regex):
-        parsed = sre_parse.parse(regex)
-        return NFA.from_regex_pattern(parsed)
+    def __init__(self, alphabet=None):
+        self.alphabet = alphabet or utils.ALPHABET
+        # Create an empty NFA
+        self.boundaries = []
+        self.states = [State()]
+        self.transitions = []
+        self.start_state = self.states[0]
+        self.current_state = self.start_state
+        # Track lookarounds
+        self.lookarounds = []
 
-    @staticmethod
-    def from_regex_pattern(regex: sre_parse.SubPattern):
-        if 0 == len(regex.data):
-            raise ValueError("ERROR: regex is empty")
-        elif 1 == len(regex.data):
-            return NFA.sre_pattern_to_nfa(regex[0])
+    def __contains__(self, item):
+        if isinstance(item, State) or isinstance(item, SynchronizedState):
+            return item in self.states
+        elif isinstance(item, Transition):
+            return item in self.transitions
+        elif isinstance(item, Lookaround):
+            return item in self.lookarounds
+        elif isinstance(item, Boundary):
+            return item in self.boundaries
         else:
-            nfas = [NFA.sre_pattern_to_nfa(construct) for construct in regex.data]
-            for n in nfas[1:]:
-                nfas[0].concatenate(n)
-            return nfas[0]
-
-    @staticmethod
-    def sre_pattern_to_nfa(pattern):
-        node_type, node_value = pattern
-        if sre_constants.LITERAL == node_type:  # a
-            return NFA().append_transition(chr(node_value))
-        elif sre_constants.NOT_LITERAL == node_type:  # [^a]
-            positive_range = NFA().append_transition(chr(node_value))
-            return positive_range.negate_range_transition_between(
-                positive_range.start_state, positive_range.get_end_states()[0]
-            )
-        elif (
-            sre_constants.RANGE == node_type
-        ):  # # [abc], but also (a|b|c) is translated to this
-            low, high = node_value
-            return NFA.alternate(
-                *[NFA().append_transition(chr(i)) for i in range(low, high + 1)]
-            )
-        elif sre_constants.SUBPATTERN == node_type:  # (a)
-            # FIXME: we need to address the usage of backreferences and captured groups, currently ignored
-            return NFA.from_regex_pattern(node_value[-1])
-        # FIXME: min_repeat = max_repeat is very very very wrong and could lead to unexpected results
-        # Using it as a temporary workaround to start testing
-        elif (
-            sre_constants.MAX_REPEAT == node_type
-            or sre_constants.MIN_REPEAT == node_type
-        ):
-            low, high, value = node_value
-            if (0, 1) == (low, high):  # a?
-                return NFA.from_regex_pattern(value).make_skippable()
-            elif (0, sre_constants.MAXREPEAT) == (low, high):  # a*
-                return NFA.from_regex_pattern(value).make_kleene()
-            elif (1, sre_constants.MAXREPEAT) == (low, high):  # a+
-                return NFA.from_regex_pattern(value).concatenate(
-                    NFA.from_regex_pattern(value).make_kleene()
-                )
-            else:  # a{3,5}, a{3}
-                nfa = NFA()
-                for _ in range(low):
-                    nfa.concatenate(NFA.from_regex_pattern(value))
-                if high == sre_constants.MAXREPEAT:
-                    nfa.concatenate(NFA.from_regex_pattern(value).make_kleene())
-                else:
-                    for _ in range(high - low):
-                        nfa.concatenate(NFA.from_regex_pattern(value).make_skippable())
-                return nfa
-        elif sre_constants.BRANCH == node_type:  # ab|cd
-            _, value = node_value
-            return NFA.alternate(*[NFA.from_regex_pattern(v) for v in value])
-        elif (
-            sre_constants.IN == node_type
-        ):  # [abc], but also (a|b|c) is translated to this
-            first_subnode_type, _ = node_value[0]
-            if sre_constants.NEGATE == first_subnode_type:  # [^abc]
-                positive_range = NFA.alternate(
-                    *[
-                        NFA.sre_pattern_to_nfa(subpattern)
-                        for subpattern in node_value[1:]
-                    ]
-                ).simplify()
-                return positive_range.negate_range_transition_between(
-                    positive_range.start_state, positive_range.get_end_states()[0]
-                )
-            else:
-                return NFA.alternate(
-                    *[NFA.sre_pattern_to_nfa(subpattern) for subpattern in node_value]
-                ).simplify()
-        elif sre_constants.ANY == node_type:  # .
-            return NFA.alternate(*[NFA().append_transition(c) for c in NFA.alphabet])
-        elif sre_constants.CATEGORY == node_type:  # \d, \s, \w
-            if sre_constants.CATEGORY_DIGIT == node_value:  # \d
-                return NFA.from_regex("[0-9]")
-            elif sre_constants.CATEGORY_NOT_DIGIT == node_value:  # \D
-                return NFA.from_regex("[^0-9]")
-            elif sre_constants.CATEGORY_SPACE == node_value:  # \s
-                return NFA.from_regex("[ \t\n\r\f\v]")
-            elif sre_constants.CATEGORY_NOT_SPACE == node_value:  # \S
-                return NFA.from_regex("[^ \t\n\r\f\v]")
-            elif sre_constants.CATEGORY_WORD == node_value:  # \w
-                return NFA.from_regex("[a-zA-Z0-9_]")
-            elif sre_constants.CATEGORY_NOT_WORD == node_value:  # \W
-                return NFA.from_regex("[^a-zA-Z0-9_]")
-            else:
-                raise NotImplementedError(
-                    f"ERROR: regex category {node_value} not implemented"
-                )
-        # Lookarounds
-        elif node_type in [
-            sre_constants.ASSERT_NOT,
-            sre_constants.ASSERT,
-        ]:  # (?!abc), (?<!abc), (?=abc), (?<=abc)
-            direction, pattern = node_value
-            base_nfa = NFA()
-            lookaround_nfa = NFA.from_regex_pattern(pattern)
-            lookaround = Lookaround(
-                base_nfa.start_state,
-                ENUM_LOOKAROUND_TYPE[node_type],
-                # TODO refactor using Direction enum
-                ENUM_LOOKAROUND_DIRECTION[direction],
-                lookaround_nfa,
-            )
-            base_nfa.lookarounds.append(lookaround)
-            return base_nfa
-        # Boundaries
-        elif node_type == sre_constants.AT:  # \b, \B
-            boundary = node_value
-            base_nfa = NFA()
-            boundary = Boundary(base_nfa.start_state, boundary)
-            base_nfa.boundaries.append(boundary)
-            return base_nfa
-
-        else:
-            raise NotImplementedError(
-                f"ERROR: regex construct {pattern} not implemented"
-            )
-
-    @staticmethod
-    def alternate(*nfas):
-        """
-        Create a new NFA that accepts the union of the strings accepted by the input NFAs
-        Basically an OR for NFAs
-        :param nfas:
-        :return:
-        """
-        nfa = NFA()
-
-        # Mark initial state as non-accepting and create a new end state
-        nfa.start_state.is_end_state = False
-        new_end_state = State()
-        nfa.states.append(new_end_state)
-
-        for n in nfas:
-            nfa.states.extend(n.states)
-            nfa.transitions.extend(n.transitions)
-            nfa.set_epsilon_transition(nfa.start_state, n.start_state)
-            for end_state in n.get_end_states():
-                end_state.is_end_state = False
-                nfa.set_epsilon_transition(end_state, new_end_state)
-
-        return nfa
-
-    @staticmethod
-    def negate(nfa_orig):
-        """
-        Negate an NFA by creating a new NFA that accepts all strings not accepted by the input NFA
-        :param nfa_orig:
-        :return:
-        """
-        nfa_orig_copy = copy.deepcopy(nfa_orig.simplify())
-        nfa = copy.deepcopy(nfa_orig_copy)
-
-        nfa.start_state.is_end_state = False
-        continue_end_state = State()
-        # empty_end_state = State()
-        for s in nfa.states:
-            s.is_end_state = not s.is_end_state
-            if s.is_end_state:
-                # nfa.set_epsilon_transition(s, empty_end_state)
-                # print(s.id)
-                # print([(t.to_state.id, t.symbol) for t in s.get_transitions()])
-                # print(sorted(s.get_all_outgoing_symbols()))
-                # print(sorted(s.complement_outbound_transitions()))
-                for symbol in s.complement_outbound_transitions():
-                    nfa.set_transition(symbol, s, continue_end_state)
-                # s.is_end_state = False
-
-        nfa.states.append(continue_end_state)
-        nfa.concatenate(NFA.from_regex(".*"), on_states=[continue_end_state])
-
-        # nfa.states.append(empty_end_state)
-        return nfa
-
-    @staticmethod
-    def intersect(nfa1, nfa2, nfa1_sync_state=None, nfa2_sync_state=None):
-        """
-        Intersect two NFAs by creating a new NFA that accepts strings accepted by both input NFAs
-        Basically an AND for NFAs
-
-        :param nfa1:
-        :param nfa2:
-        :param nfa1_sync_state: optional state in nfa1 to sync on
-        :param nfa2_sync_state: optional state in nfa2 to sync on
-        :return:
-        """
-
-        nfa1.simplify()
-        nfa2.simplify()
-
-        merged_nfa = nfa1.merge(nfa2)
-        return merged_nfa
+            return False
 
     def _add_merged_state_to_merged_nfa(
-        self, s1, s2, transition_symbol, current_sync_state
+        self, s1, s2, transition_symbol, current_sync_state, direction=Direction.FORWARD
     ):
         new_state_added = False
         new_sync_state = SynchronizedState(s1, s2)
-        print(f"Adding new state {new_sync_state}")
+        # print(f"Adding new state {new_sync_state}")
 
         if new_sync_state not in self:
-            print(f"State {new_sync_state} not in NFA")
-            print(f"self.states: {self.states}")
+            # print(f"State {new_sync_state} not in NFA")
+            # print(f"self.states: {self.states}")
             new_state_added = True
             self.states.append(new_sync_state)
 
@@ -406,7 +222,9 @@ class NFA:
                 filter(lambda x: x == new_sync_state, self.states), None
             )
 
-        self.set_transition(transition_symbol, current_sync_state, new_sync_state)
+        self.set_transition(
+            transition_symbol, current_sync_state, new_sync_state, direction=direction
+        )
 
         return new_state_added, new_sync_state
 
@@ -438,19 +256,36 @@ class NFA:
         merged_nfa.start_state = None
         merged_nfa.states = []
 
+        # print end states for nfa1 and nfa2
+        print("End states for nfa1", nfa1.get_end_states())
+        print("End states for nfa2", nfa2.get_end_states())
+        print("Direction:", direction)
+
+        if nfa1_sync_state is None:
+            if direction == Direction.FORWARD:
+                nfa1_sync_state = nfa1.start_state
+            if direction == Direction.BACKWARD:
+                nfa1_sync_state = nfa1._fix().get_end_states()[0]
+        
+        if nfa2_sync_state is None:
+            if direction == Direction.FORWARD:
+                nfa2_sync_state = nfa2.start_state
+            if direction == Direction.BACKWARD:
+                nfa2_sync_state = nfa2._fix().get_end_states()[0]
+
         starting_synchronized_state = SynchronizedState(
-            nfa1_sync_state or (
-                nfa1.start_state if Direction.FORWARD else nfa1._fix().get_end_states()[0]
-            ),
-            nfa2_sync_state or (
-                nfa2.start_state if Direction.FORWARD else nfa2._fix().get_end_states()[0]
-            ),
+            nfa1_sync_state, nfa2_sync_state
         )
 
+        print("Starting synchronized state", starting_synchronized_state)
+
         merged_nfa.states.append(starting_synchronized_state)
+
+        # FIXME: this is a workaround to fix the start state of the merged NFA
+        # but it not always necessary
         merged_nfa.start_state = starting_synchronized_state
 
-        states_frontier = deque([merged_nfa.start_state])
+        states_frontier = deque([starting_synchronized_state])
 
         while states_frontier:
             print(
@@ -472,7 +307,11 @@ class NFA:
 
                 new_state_added, new_sync_state = (
                     merged_nfa._add_merged_state_to_merged_nfa(
-                        next_s1_state, sync_state.states[1], "", sync_state
+                        next_s1_state,
+                        sync_state.states[1],
+                        "",
+                        sync_state,
+                        direction=direction,
                     )
                 )
 
@@ -484,7 +323,11 @@ class NFA:
 
                 new_state_added, new_sync_state = (
                     merged_nfa._add_merged_state_to_merged_nfa(
-                        sync_state.states[0], next_s2_state, "", sync_state
+                        sync_state.states[0],
+                        next_s2_state,
+                        "",
+                        sync_state,
+                        direction=direction,
                     )
                 )
 
@@ -509,6 +352,7 @@ class NFA:
                             next_s2_state,
                             t1.symbol,
                             sync_state,
+                            direction=direction,
                         )
                     )
 
@@ -520,7 +364,10 @@ class NFA:
             print(f"Boundary on state {b.from_state.id}")
             for sync_state in merged_nfa.states:
                 print(f" - Check on sync_state {sync_state}")
-                if b.from_state is sync_state.states[0] or b.from_state is sync_state.states[1]:
+                if (
+                    b.from_state is sync_state.states[0]
+                    or b.from_state is sync_state.states[1]
+                ):
                     merged_nfa.boundaries.append(Boundary(sync_state, b.boundary_type))
                     print(f"Appending boundary to state {sync_state}")
                     # TODO check if boundaries are transferred to the original NFA
@@ -558,7 +405,9 @@ class NFA:
         return closure
 
     def get_transitions_from(self, state_or_closure, direction=Direction.FORWARD):
-        if isinstance(state_or_closure, State):
+        if isinstance(state_or_closure, State) or isinstance(
+            state_or_closure, SynchronizedState
+        ):
             return state_or_closure.get_transitions(direction=direction)
         else:
             transitions = []
@@ -581,30 +430,6 @@ class NFA:
         self.lookarounds.extend(nfa.lookarounds)
         self.boundaries.extend(nfa.boundaries)
         return self
-
-    alphabet = nfautils.ALPHABET
-
-    def __init__(self):
-        # Create an empty NFA
-        self.boundaries = []
-        self.states = [State()]
-        self.transitions = []
-        self.start_state = self.states[0]
-        self.current_state = self.start_state
-        # Track lookarounds
-        self.lookarounds = []
-
-    def __contains__(self, item):
-        if isinstance(item, State) or isinstance(item, SynchronizedState):
-            return item in self.states
-        elif isinstance(item, Transition):
-            return item in self.transitions
-        elif isinstance(item, Lookaround):
-            return item in self.lookarounds
-        elif isinstance(item, Boundary):
-            return item in self.boundaries
-        else:
-            return False
 
     def get_end_states(self):
         return list(filter(lambda x: x.is_end_state, self.states))
@@ -661,7 +486,10 @@ class NFA:
         self.consume(t)
         return self
 
-    def set_transition(self, symbol, from_state, to_state):
+    def set_transition(self, symbol, from_state, to_state, direction=Direction.FORWARD):
+        if direction == Direction.BACKWARD:
+            from_state, to_state = to_state, from_state
+
         new_transition = Transition(symbol, from_state, to_state)
 
         # Check if there's another transition between these two states with the same symbol
@@ -958,7 +786,7 @@ class NFA:
         # Get all symbols in the transitions
         symbols = [t.symbol for t in transitions]
         # Get all symbols not in the transitions
-        not_symbols = list(set(NFA.alphabet) - set(symbols))
+        not_symbols = list(set(self.alphabet) - set(symbols))
 
         # FIXME: Regex don't have this behavior except when at end of string (sometimes)
         # if '' not in symbols:
@@ -991,6 +819,13 @@ class NFA:
             )
         except ValueError:
             pass
+    
+    def remove_state(self, state):
+        for t in state.get_transitions():
+            self.remove_transition(t)
+        for t in state.get_transitions(direction=Direction.BACKWARD):
+            self.remove_transition(t)
+        self.states.remove(state)
 
     def to_dot(self, view=True, simplified=False):
         """
@@ -1023,6 +858,7 @@ class NFA:
                     )
                     else "black"
                 ),
+                label=str(s),
             )
 
         # Group transitions by from_state and to_state
@@ -1050,7 +886,7 @@ class NFA:
                 # print("Add symbol", t.symbol)
                 symbols.add(t.symbol)
 
-            label = nfautils.range_label(symbols)
+            label = utils.range_label(symbols)
 
             if label:
                 # ("Creating transition", t.from_state.id, t.to_state.id, repr(label))
@@ -1163,7 +999,7 @@ class NFA:
                     symbols = set(t.symbol for t in transitions)
                     # print("Symbols", symbols)
                     if all(len(symbol) == 1 or not symbol for symbol in symbols):
-                        label = nfautils.range_label(symbols - {""})
+                        label = utils.range_label(symbols - {""})
                     else:
                         # FIXME this gives wrong results due to parenthesis, might need better handling
                         label = "|".join(
@@ -1270,142 +1106,352 @@ class NFA:
         final_transition = copy_nfa.transitions[0]
         return final_transition.symbol
 
+    def _stitch_synched_nfa(self, synched_nfa):
+        # Warning: this currently assumes that the synced NFA was generated by the self NFA and another NFA
+        # With self being the first NFA in the sync
+
+        # States to substitute
+        substiuition_states = {}
+
+        # Stitch states
+        for s in synched_nfa.states:
+            substiuition_states[s.states[0]] = s
+
+            # Add the sync state to the self NFA, but as a State instead of a SynchronizedState
+            self.states.append(s)
+
+            # Create an epsilon transition from the self state to the sync state
+            self.set_epsilon_transition(s.states[0], s)
+
+        # Add new synched transitions to self NFA
+        self.transitions.extend(synched_nfa.transitions)
+
+        # Remove obsolete transitions (transitions between sync states)
+        # TODO consider moving this part to a dedicated "destitch" function
+        for t in list(self.transitions):
+            if (
+                t.from_state in substiuition_states
+                and t.to_state in substiuition_states
+                # TODO check if this is a workaround or a rule (smells like a rule, but need to check)
+                and not t.is_self_loop()
+            ):
+                self.remove_transition(t)
+
+        return self
+
     def _merge_word_boundary(self, boundary):
-        word_boundary_nfa = NFA.from_regex(r"\w").simplify()
-        non_word_boundary_nfa = NFA.from_regex(r"\W").simplify()
+        word_boundary_nfa = from_regex(r"\w").simplify()
+        non_word_boundary_nfa = from_regex(r"\W").simplify()
         # nfa
         joint_state = boundary.from_state
-        joint_state_plus_one = joint_state.get_transitions(direction=Direction.FORWARD)[
-            0
-        ].to_state
+        print("Joint state: ", joint_state)
+        joint_state_plus_one = joint_state.get_transitions(
+            direction=Direction.FORWARD
+        )[0].get_next_state(direction=Direction.FORWARD)
         joint_state_minus_one = joint_state.get_transitions(
             direction=Direction.BACKWARD
-        )[0].from_state
+        )[0].get_next_state(direction=Direction.BACKWARD)
+        print("Joint state -1: ", joint_state_minus_one)
+        print("Joint state +1: ", joint_state_plus_one)
 
         # \w\W
-        backward_merged_nfa, backward_synched_states = self.merge(
+        backward_merged_nfa = self.merge(
             word_boundary_nfa,
             nfa1_sync_state=joint_state_minus_one,
             direction=Direction.BACKWARD,
         )
+        backward_merged_nfa.to_dot()
+        input()
 
-        forward_merged_nfa, forward_synched_states = self.merge(
+        forward_merged_nfa = self.merge(
             non_word_boundary_nfa,
             nfa1_sync_state=joint_state_plus_one,
             direction=Direction.FORWARD,
         )
+        # forward_merged_nfa.to_dot()
+        # input()
 
-        successful_word_nonword_nfa = not all(
-            t.is_epsilon_transition() for t in forward_merged_nfa.transitions
-        ) and not all(
-            t.is_epsilon_transition() for t in backward_merged_nfa.transitions
-        )
-        # stitch NFA over synched states
+        # Concatenate the \w and \W synched NFAs
         word_nonword_nfa = backward_merged_nfa.concatenate(
             forward_merged_nfa,
-            on_states=[
-                s for s in backward_merged_nfa.states if not s.get_transitions()
-            ],
-        )
-        # merge synched states
-        word_nonword_synched_states = {
-            "backward": backward_synched_states,
-            "forward": forward_synched_states,
-        }
-        for (s1, s2), ss in backward_synched_states.items():
-            if not ss.get_transitions(direction=Direction.BACKWARD):
-                self.set_epsilon_transition(s1, ss)
-            if not ss.get_transitions():
-                self.set_epsilon_transition(ss, s1)
-        for (s1, s2), ss in forward_synched_states.items():
-            if not ss.get_transitions(direction=Direction.BACKWARD):
-                self.set_epsilon_transition(s1, ss)
-            if not ss.get_transitions():
-                self.set_epsilon_transition(ss, s1)
+            # get synced states that contain the joint_state_minus_one as the first state
+            on_states=[s for s in backward_merged_nfa.states if s.states[0] == joint_state_minus_one],
+        ).simplify()
+
+        word_nonword_nfa.to_dot()
+        input()
+
+        # Create new boundary NFAs to avoid duplicates in synced states
+        # TODO check if this actually matters
+        non_word_boundary_nfa = from_regex(r"\W").simplify()
+        word_boundary_nfa = from_regex(r"\w").simplify()
+
 
         # \W\w
-        backward_merged_nfa, backward_synched_states = self.merge(
+        backward_merged_nfa = self.merge(
             non_word_boundary_nfa,
             nfa1_sync_state=joint_state_minus_one,
             direction=Direction.BACKWARD,
         )
-        forward_merged_nfa, forward_synched_states = self.merge(
+        forward_merged_nfa = self.merge(
             word_boundary_nfa,
             nfa1_sync_state=joint_state_plus_one,
             direction=Direction.FORWARD,
-        )
-
-        # Both \W and \w must exist
-        # FIXME also consider start and end states
-        successful_nonword_word_nfa = not all(
-            t.is_epsilon_transition() for t in forward_merged_nfa.transitions
-        ) and not all(
-            t.is_epsilon_transition() for t in backward_merged_nfa.transitions
         )
         nonword_word_nfa = backward_merged_nfa.concatenate(
             forward_merged_nfa,
-            on_states=[
-                s for s in backward_merged_nfa.states if not s.get_transitions()
-            ],
-        )
-        # merge synched states
-        nonword_word_synched_states = {
-            "backward": backward_synched_states,
-            "forward": forward_synched_states,
-        }
-        # Merge only if successful
-        if successful_word_nonword_nfa:
-            self.states.extend(word_nonword_nfa.states)
-            self.transitions.extend(word_nonword_nfa.transitions)
+            # get synced states that contain the joint_state_minus_one as the first state
+            on_states=[s for s in backward_merged_nfa.states if s.states[0] == joint_state_minus_one],
+        ).simplify()
 
-            for (s1, s2), ss in word_nonword_synched_states["backward"].items():
-                if not ss.get_transitions(direction=Direction.BACKWARD):
-                    self.set_epsilon_transition(s1, ss)
-                if not ss.get_transitions():
-                    self.set_epsilon_transition(ss, s1)
+        nonword_word_nfa.to_dot()
+        input()
 
-            for (s1, s2), ss in word_nonword_synched_states["forward"].items():
-                if not ss.get_transitions(direction=Direction.BACKWARD):
-                    self.set_epsilon_transition(s1, ss)
-                if not ss.get_transitions():
-                    self.set_epsilon_transition(ss, s1)
-        if successful_nonword_word_nfa:
-            # transfer states and transitions to the original NFA
-            self.states.extend(nonword_word_nfa.states)
-            self.transitions.extend(nonword_word_nfa.transitions)
+        # Stitch concatenated NFA to the original NFA
+        # FIXME this is currently stitched at the end because _stitch is destructive for the original NFA
+        #   If we stitch before, we might break the merge process for the second boundary NFA
+        self._stitch_synched_nfa(word_nonword_nfa)
+        self._stitch_synched_nfa(nonword_word_nfa)
 
-            for (s1, s2), ss in nonword_word_synched_states["backward"].items():
-                if not ss.get_transitions(direction=Direction.BACKWARD):
-                    self.set_epsilon_transition(s1, ss)
-                if not ss.get_transitions():
-                    self.set_epsilon_transition(ss, s1)
-
-            for (s1, s2), ss in nonword_word_synched_states["forward"].items():
-                if not ss.get_transitions(direction=Direction.BACKWARD):
-                    self.set_epsilon_transition(s1, ss)
-                if not ss.get_transitions():
-                    self.set_epsilon_transition(ss, s1)
-        # Remove boundary state and all incoming and outgoing transitions
-        for t in list(
-            joint_state.get_transitions(direction=Direction.BACKWARD)
-            + joint_state.get_transitions()
-        ):
-            self.remove_transition(t)
-
-        print("Removing joint state", joint_state)
-        self.states.remove(joint_state)
+        # Remove the original boundary
+        self.remove_state(joint_state)
 
         return self
 
 
+def from_regex(regex):
+    parsed = sre_parse.parse(regex)
+    return from_regex_pattern(parsed)
+
+
+def from_regex_pattern(regex: sre_parse.SubPattern):
+    if 0 == len(regex.data):
+        raise ValueError("ERROR: regex is empty")
+    elif 1 == len(regex.data):
+        return sre_pattern_to_nfa(regex[0])
+    else:
+        nfas = [sre_pattern_to_nfa(construct) for construct in regex.data]
+        for n in nfas[1:]:
+            nfas[0].concatenate(n)
+        return nfas[0]
+
+
+def sre_pattern_to_nfa(pattern):
+    node_type, node_value = pattern
+    if sre_constants.LITERAL == node_type:  # a
+        return NFA().append_transition(chr(node_value))
+    elif sre_constants.NOT_LITERAL == node_type:  # [^a]
+        positive_range = NFA().append_transition(chr(node_value))
+        return positive_range.negate_range_transition_between(
+            positive_range.start_state, positive_range.get_end_states()[0]
+        )
+    elif (
+        sre_constants.RANGE == node_type
+    ):  # # [abc], but also (a|b|c) is translated to this
+        low, high = node_value
+        return alternate(
+            *[NFA().append_transition(chr(i)) for i in range(low, high + 1)]
+        )
+    elif sre_constants.SUBPATTERN == node_type:  # (a)
+        # FIXME: we need to address the usage of backreferences and captured groups, currently ignored
+        return from_regex_pattern(node_value[-1])
+    # FIXME: min_repeat = max_repeat is very very very wrong and could lead to unexpected results
+    # Using it as a temporary workaround to start testing
+    elif sre_constants.MAX_REPEAT == node_type or sre_constants.MIN_REPEAT == node_type:
+        low, high, value = node_value
+        if (0, 1) == (low, high):  # a?
+            return from_regex_pattern(value).make_skippable()
+        elif (0, sre_constants.MAXREPEAT) == (low, high):  # a*
+            return from_regex_pattern(value).make_kleene()
+        elif (1, sre_constants.MAXREPEAT) == (low, high):  # a+
+            return from_regex_pattern(value).concatenate(
+                from_regex_pattern(value).make_kleene()
+            )
+        else:  # a{3,5}, a{3}
+            nfa = NFA()
+            for _ in range(low):
+                nfa.concatenate(from_regex_pattern(value))
+            if high == sre_constants.MAXREPEAT:
+                nfa.concatenate(from_regex_pattern(value).make_kleene())
+            else:
+                for _ in range(high - low):
+                    nfa.concatenate(from_regex_pattern(value).make_skippable())
+            return nfa
+    elif sre_constants.BRANCH == node_type:  # ab|cd
+        _, value = node_value
+        return alternate(*[from_regex_pattern(v) for v in value])
+    elif sre_constants.IN == node_type:  # [abc], but also (a|b|c) is translated to this
+        first_subnode_type, _ = node_value[0]
+        if sre_constants.NEGATE == first_subnode_type:  # [^abc]
+            positive_range = alternate(
+                *[sre_pattern_to_nfa(subpattern) for subpattern in node_value[1:]]
+            ).simplify()
+            return positive_range.negate_range_transition_between(
+                positive_range.start_state, positive_range.get_end_states()[0]
+            )
+        else:
+            return alternate(
+                *[sre_pattern_to_nfa(subpattern) for subpattern in node_value]
+            ).simplify()
+    elif sre_constants.ANY == node_type:  # .
+        return alternate(*[NFA().append_transition(c) for c in utils.ALPHABET])
+    elif sre_constants.CATEGORY == node_type:  # \d, \s, \w
+        if sre_constants.CATEGORY_DIGIT == node_value:  # \d
+            return from_regex("[0-9]")
+        elif sre_constants.CATEGORY_NOT_DIGIT == node_value:  # \D
+            return from_regex("[^0-9]")
+        elif sre_constants.CATEGORY_SPACE == node_value:  # \s
+            return from_regex("[ \t\n\r\f\v]")
+        elif sre_constants.CATEGORY_NOT_SPACE == node_value:  # \S
+            return from_regex("[^ \t\n\r\f\v]")
+        elif sre_constants.CATEGORY_WORD == node_value:  # \w
+            return from_regex("[a-zA-Z0-9_]")
+        elif sre_constants.CATEGORY_NOT_WORD == node_value:  # \W
+            return from_regex("[^a-zA-Z0-9_]")
+        else:
+            raise NotImplementedError(
+                f"ERROR: regex category {node_value} not implemented"
+            )
+    # Lookarounds
+    elif node_type in [
+        sre_constants.ASSERT_NOT,
+        sre_constants.ASSERT,
+    ]:  # (?!abc), (?<!abc), (?=abc), (?<=abc)
+        direction, pattern = node_value
+        base_nfa = NFA()
+        lookaround_nfa = from_regex_pattern(pattern)
+        lookaround = Lookaround(
+            base_nfa.start_state,
+            ENUM_LOOKAROUND_TYPE[node_type],
+            # TODO refactor using Direction enum
+            ENUM_LOOKAROUND_DIRECTION[direction],
+            lookaround_nfa,
+        )
+        base_nfa.lookarounds.append(lookaround)
+        return base_nfa
+    # Boundaries
+    elif node_type == sre_constants.AT:  # \b, \B
+        boundary = node_value
+        base_nfa = NFA()
+        boundary = Boundary(base_nfa.start_state, boundary)
+        base_nfa.boundaries.append(boundary)
+        return base_nfa
+
+    else:
+        raise NotImplementedError(f"ERROR: regex construct {pattern} not implemented")
+
+
+def alternate(*nfas):
+    """
+    Create a new NFA that accepts the union of the strings accepted by the input NFAs
+    Basically an OR for NFAs
+    :param nfas:
+    :return:
+    """
+    nfa = NFA()
+
+    # Mark initial state as non-accepting and create a new end state
+    nfa.start_state.is_end_state = False
+    new_end_state = State()
+    nfa.states.append(new_end_state)
+
+    for n in nfas:
+        nfa.states.extend(n.states)
+        nfa.transitions.extend(n.transitions)
+        nfa.set_epsilon_transition(nfa.start_state, n.start_state)
+        for end_state in n.get_end_states():
+            end_state.is_end_state = False
+            nfa.set_epsilon_transition(end_state, new_end_state)
+
+    return nfa
+
+
+def negate(nfa_orig):
+    """
+    Negate an NFA by creating a new NFA that accepts all strings not accepted by the input NFA
+    :param nfa_orig:
+    :return:
+    """
+    nfa_orig_copy = copy.deepcopy(nfa_orig.simplify())
+    nfa = copy.deepcopy(nfa_orig_copy)
+
+    nfa.start_state.is_end_state = False
+    continue_end_state = State()
+    # empty_end_state = State()
+    for s in nfa.states:
+        s.is_end_state = not s.is_end_state
+        if s.is_end_state:
+            # nfa.set_epsilon_transition(s, empty_end_state)
+            # print(s.id)
+            # print([(t.to_state.id, t.symbol) for t in s.get_transitions()])
+            # print(sorted(s.get_all_outgoing_symbols()))
+            # print(sorted(s.complement_outbound_transitions()))
+            for symbol in s.complement_outbound_transitions():
+                nfa.set_transition(symbol, s, continue_end_state)
+            # s.is_end_state = False
+
+    nfa.states.append(continue_end_state)
+    nfa.concatenate(from_regex(".*"), on_states=[continue_end_state])
+
+    # nfa.states.append(empty_end_state)
+    return nfa
+
+
+def intersect(nfa1: NFA, nfa2: NFA, nfa1_sync_state=None, nfa2_sync_state=None):
+    """
+    Intersect two NFAs by creating a new NFA that accepts strings accepted by both input NFAs
+    Basically an AND for NFAs
+
+    :param nfa1:
+    :param nfa2:
+    :param nfa1_sync_state: optional state in nfa1 to sync on
+    :param nfa2_sync_state: optional state in nfa2 to sync on
+    :return:
+    """
+
+    nfa1.simplify()
+    nfa2.simplify()
+
+    merged_nfa = nfa1.merge(nfa2)
+    stitched_nfa = nfa1._stitch_synched_nfa(merged_nfa)
+
+    return stitched_nfa
+
+
 if __name__ == "__main__":
-    # nfa2 = NFA.from_regex(r"[b-z]{3}[a-z\"']*\balert\b(abc|'as|\"else).").simplify()
-    nfa2 = NFA.from_regex(r".*[a-f]\bb.*").simplify()
+    # nfa2 = from_regex(r"[b-z]{3}[a-z\"']*\balert\b(abc|'as|\"else).").simplify()
+    nfa = from_regex(r".*\babcd").simplify()
+    nfa.to_dot()
+    input()
 
-    for b in nfa2.boundaries:
-        nfa2._merge_word_boundary(b)
-        nfa2.to_dot(view=True)
+    for b in nfa.boundaries:
+        nfa._merge_word_boundary(b)
+        nfa.to_dot(view=True)
 
-    print(nfa2.walk())
+    print(nfa.walk())
 
     print("debug")
+
+def main2():
+    r1 = from_regex(".*(?:[a-z'+]|abcd|lmno.)").simplify()
+    r1.to_dot()
+    print(r1.get_end_states())
+    input()
+    r2 = from_regex("\w").simplify()
+    r2.to_dot()
+    input()
+
+    merged_nfa = r1.merge(
+        r2,
+        # nfa1_sync_state=r1.get_end_states()[0],
+        # nfa2_sync_state=r2.get_end_states()[0],
+        direction=Direction.BACKWARD,
+        # direction=Direction.FORWARD,
+    )
+
+    merged_nfa.to_dot()
+    input()
+
+    r1._stitch_synched_nfa(merged_nfa)
+    r1.to_dot(simplified=True)
+

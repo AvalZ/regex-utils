@@ -1,31 +1,31 @@
-from regex_utils.nfa import NFA
+from regex_utils.nfa import nfa as nfa_utils
 
 
 class Regex:
-    def __init__(self, regex_string=None, nfa=None):
+    def __init__(self, regex_string=None, regex_nfa=None):
         self.regex_string = regex_string
-        self.nfa = nfa
+        self.regex_nfa = regex_nfa
 
-        if regex_string and not nfa:
-            self.nfa = NFA.from_regex(regex_string).simplify()
+        if regex_string and not regex_nfa:
+            self.regex_nfa = nfa_utils.from_regex(regex_string).simplify()
 
-        if nfa and not regex_string:
-            self.regex_string = nfa.to_regex()
+        if regex_nfa and not regex_string:
+            self.regex_string = regex_nfa.to_regex()
 
-        if self.nfa.boundaries:
-            self.nfa.merge_boundaries().simplify()
+        if self.regex_nfa.boundaries:
+            self.regex_nfa.merge_boundaries().simplify()
 
     def __str__(self):
         return self.to_string()
 
     def to_string(self):
         if self.regex_string is None:
-            self.regex_string = self.nfa.to_regex()
+            self.regex_string = self.regex_nfa.to_regex()
 
         return self.regex_string
 
     def to_dot(self, view=False):
-        return self.nfa.to_dot(view=view)
+        return self.regex_nfa.to_dot(view=view)
 
     def generate_sample(self):
         """
@@ -43,7 +43,7 @@ class Regex:
 
         :return:
         """
-        sample = self.nfa.walk()
+        sample = self.regex_nfa.walk()
 
         return sample
 
@@ -56,7 +56,7 @@ def from_nfa(nfa):
     :param nfa: an NFA object
     :return: a Regex object
     """
-    return Regex(nfa=nfa)
+    return Regex(regex_nfa=nfa)
 
 
 def from_string(regex_string):
@@ -87,8 +87,8 @@ def negate(r):
     if type(r) is str:
         r = Regex(regex_string=r)
 
-    negated_nfa = NFA.negate(r.nfa)
-    negated_regex = Regex(nfa=negated_nfa)
+    negated_nfa = nfa_utils.negate(r.regex_nfa)
+    negated_regex = Regex(regex_nfa=negated_nfa)
 
     return negated_regex
 
@@ -101,17 +101,17 @@ def intersect(*regexes):
     :return: resulting regex
     """
     regexes = [Regex(r) if type(r) == str else r for r in regexes]
-    nfas = [r.nfa for r in regexes]
+    nfas = [r.regex_nfa for r in regexes]
 
     intersection = nfas[0]
     for nfa in nfas[1:]:
         intersection.simplify()
         nfa.simplify()
-        intersection = NFA.intersect(intersection, nfa)
+        intersection = nfa_utils.intersect(intersection, nfa)
 
     intersection.simplify()
 
-    return Regex(nfa=intersection)
+    return Regex(regex_nfa=intersection)
 
 
 if __name__ == "__main__":
