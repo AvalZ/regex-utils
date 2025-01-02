@@ -19,7 +19,7 @@ class Direction(StrEnum):
 class State:
     id_counter = 0
 
-    def __init__(self, end_state=True, id=None):
+    def __init__(self, start_state=False, end_state=True, id=None):
         if id:
             self.id = id
         else:
@@ -27,12 +27,19 @@ class State:
             State.id_counter += 1
         self.out_transitions = []
         self.in_transitions = []
+        self.is_start_state = start_state
         self.is_end_state = end_state
 
     def is_dead_end(self):
         return not self.is_end_state and (
             len(self.get_transitions()) == 0
             or all(t.is_self_loop() for t in self.get_transitions())
+        )
+
+    def is_dead_start(self):
+        return not self.is_start_state and (
+            not self.get_transitions(Direction.BACKWARD)
+            or all(t.is_self_loop() for t in self.get_transitions(Direction.BACKWARD))
         )
 
     def get_outgoing_symbols(self, direction=Direction.FORWARD):
@@ -99,6 +106,12 @@ class SynchronizedState(State):
             end_state=end_state or (s1.is_end_state and s2.is_end_state), id=id
         )
         self.states = (s1, s2)
+
+    def is_exit_state(self):
+        return self.get_transitions(Direction.FORWARD) == []
+    
+    def is_entry_state(self):
+        return self.get_transitions(Direction.BACKWARD) == []
 
     def __str__(self) -> str:
         return f"{self.id}:({self.states[0]},{self.states[1]})"
@@ -191,6 +204,14 @@ class NFA:
         self.current_state = self.start_state
         # Track lookarounds
         self.lookarounds = []
+    
+    def is_empty(self):
+        if not self.transitions or all(t.is_epsilon_transition() for t in self.transitions):
+            return True
+        return False
+    
+    def __bool__(self):
+        return not self.is_empty()
 
     def __contains__(self, item):
         if isinstance(item, State) or isinstance(item, SynchronizedState):
@@ -266,7 +287,7 @@ class NFA:
                 nfa1_sync_state = nfa1.start_state
             if direction == Direction.BACKWARD:
                 nfa1_sync_state = nfa1._fix().get_end_states()[0]
-        
+
         if nfa2_sync_state is None:
             if direction == Direction.FORWARD:
                 nfa2_sync_state = nfa2.start_state
@@ -282,7 +303,7 @@ class NFA:
         merged_nfa.states.append(starting_synchronized_state)
 
         # FIXME: this is a workaround to fix the start state of the merged NFA
-        # but it not always necessary
+        # but we're not currently using start_state in SynchronizedStates
         merged_nfa.start_state = starting_synchronized_state
 
         states_frontier = deque([starting_synchronized_state])
@@ -415,20 +436,26 @@ class NFA:
                 transitions.extend(s.get_transitions(direction=direction))
             return transitions
 
-    def concatenate(self, nfa, on_states=None):
-        if on_states is None:
+    def concatenate(self, other_nfa, on_end_states=None, on_other_nfa_start_states=None):
+        if on_end_states is None:
             end_states = self.get_end_states()
         else:
-            end_states = on_states
+            end_states = on_end_states
 
-        for s in end_states:
-            self.set_epsilon_transition(s, nfa.start_state)
-            s.is_end_state = False
+        if on_other_nfa_start_states is None:
+            other_nfa_start_states = [other_nfa.start_state]
+        else:
+            other_nfa_start_states = on_other_nfa_start_states
 
-        self.states.extend(nfa.states)
-        self.transitions.extend(nfa.transitions)
-        self.lookarounds.extend(nfa.lookarounds)
-        self.boundaries.extend(nfa.boundaries)
+        for end_state in end_states:
+            for start_state in other_nfa_start_states:
+                self.set_epsilon_transition(end_state, start_state)
+                end_state.is_end_state = False
+
+        self.states.extend(other_nfa.states)
+        self.transitions.extend(other_nfa.transitions)
+        self.lookarounds.extend(other_nfa.lookarounds)
+        self.boundaries.extend(other_nfa.boundaries)
         return self
 
     def get_end_states(self):
@@ -486,30 +513,19 @@ class NFA:
         self.consume(t)
         return self
 
-    def set_transition(self, symbol, from_state, to_state, direction=Direction.FORWARD):
-        if direction == Direction.BACKWARD:
-            from_state, to_state = to_state, from_state
+    def set_transition(self, symbol, from_state, to_state, direction=Direction.FORWARD, deep=True):
+        if direction == Direction.FORWARD:
+            new_transition = Transition(symbol, from_state, to_state)
+        elif direction == Direction.BACKWARD:
+            new_transition = Transition(symbol, to_state, from_state)
 
-        new_transition = Transition(symbol, from_state, to_state)
+        if new_transition not in self:
+            self.transitions.append(new_transition)
 
-        # Check if there's another transition between these two states with the same symbol
-        existing_transition = next(
-            (
-                t
-                for t in from_state.get_transitions(direction=Direction.FORWARD)
-                if t == new_transition
-            ),
-            None,
-        )
+        if deep:
+            new_transition.get_next_state(Direction.BACKWARD).get_transitions(Direction.FORWARD).append(new_transition)
+            new_transition.get_next_state(Direction.FORWARD).get_transitions(Direction.BACKWARD).append(new_transition)
 
-        # if it exists already, return the existing one
-        if existing_transition:
-            return existing_transition
-
-        # Otherwise, add the new transition to the NFA and return it
-        self.transitions.append(new_transition)
-        from_state.out_transitions.append(new_transition)
-        to_state.in_transitions.append(new_transition)
         return new_transition
 
     def set_epsilon_transition(self, from_state, to_state):
@@ -635,6 +651,7 @@ class NFA:
         return self
 
     def _remove_dead_start_states(self):
+        # FIXME use is_dead_start function from State class
         # Remove all states that have no in_transitions and are not the start_state
         dead_start_states = [
             s
@@ -819,7 +836,7 @@ class NFA:
             )
         except ValueError:
             pass
-    
+
     def remove_state(self, state):
         for t in state.get_transitions():
             self.remove_transition(t)
@@ -1111,31 +1128,25 @@ class NFA:
         # With self being the first NFA in the sync
 
         # States to substitute
-        substiuition_states = {}
+        substitution_states = {}
 
         # Stitch states
         for s in synched_nfa.states:
-            substiuition_states[s.states[0]] = s
+            substitution_states[s.states[0]] = s
 
             # Add the sync state to the self NFA, but as a State instead of a SynchronizedState
             self.states.append(s)
 
-            # Create an epsilon transition from the self state to the sync state
-            self.set_epsilon_transition(s.states[0], s)
+            # if the synched state is an exit state, connect the sync state to the states[0] state
+            if s.is_exit_state():
+                self.set_epsilon_transition(s, s.states[0])
+            
+            # if the synched state is an entry state, connect the states[0] state to the sync state
+            if s.is_entry_state():
+                self.set_epsilon_transition(s.states[0], s)
 
         # Add new synched transitions to self NFA
         self.transitions.extend(synched_nfa.transitions)
-
-        # Remove obsolete transitions (transitions between sync states)
-        # TODO consider moving this part to a dedicated "destitch" function
-        for t in list(self.transitions):
-            if (
-                t.from_state in substiuition_states
-                and t.to_state in substiuition_states
-                # TODO check if this is a workaround or a rule (smells like a rule, but need to check)
-                and not t.is_self_loop()
-            ):
-                self.remove_transition(t)
 
         return self
 
@@ -1144,74 +1155,82 @@ class NFA:
         non_word_boundary_nfa = from_regex(r"\W").simplify()
         # nfa
         joint_state = boundary.from_state
-        print("Joint state: ", joint_state)
-        joint_state_plus_one = joint_state.get_transitions(
-            direction=Direction.FORWARD
-        )[0].get_next_state(direction=Direction.FORWARD)
-        joint_state_minus_one = joint_state.get_transitions(
-            direction=Direction.BACKWARD
-        )[0].get_next_state(direction=Direction.BACKWARD)
-        print("Joint state -1: ", joint_state_minus_one)
-        print("Joint state +1: ", joint_state_plus_one)
 
         # \w\W
         backward_merged_nfa = self.merge(
             word_boundary_nfa,
-            nfa1_sync_state=joint_state_minus_one,
+            nfa1_sync_state=joint_state,
             direction=Direction.BACKWARD,
         )
-        backward_merged_nfa.to_dot()
-        input()
 
         forward_merged_nfa = self.merge(
             non_word_boundary_nfa,
-            nfa1_sync_state=joint_state_plus_one,
+            nfa1_sync_state=joint_state,
             direction=Direction.FORWARD,
         )
-        # forward_merged_nfa.to_dot()
-        # input()
 
-        # Concatenate the \w and \W synched NFAs
-        word_nonword_nfa = backward_merged_nfa.concatenate(
-            forward_merged_nfa,
-            # get synced states that contain the joint_state_minus_one as the first state
-            on_states=[s for s in backward_merged_nfa.states if s.states[0] == joint_state_minus_one],
-        ).simplify()
+        word_nonword_nfa = None
 
-        word_nonword_nfa.to_dot()
-        input()
+        if backward_merged_nfa and forward_merged_nfa:
+            # Concatenate the \w and \W synched NFAs
+            word_nonword_nfa = backward_merged_nfa.concatenate(
+                forward_merged_nfa,
+                # get synced states that contain the joint_state_minus_one as the first state
+                on_end_states=[
+                    s
+                    for s in backward_merged_nfa.states
+                    if s.is_exit_state()
+                ],
+                on_other_nfa_start_states=[
+                    s
+                    for s in forward_merged_nfa.states
+                    if s.is_entry_state()
+                ],
+            )
 
         # Create new boundary NFAs to avoid duplicates in synced states
         # TODO check if this actually matters
         non_word_boundary_nfa = from_regex(r"\W").simplify()
         word_boundary_nfa = from_regex(r"\w").simplify()
 
-
         # \W\w
         backward_merged_nfa = self.merge(
             non_word_boundary_nfa,
-            nfa1_sync_state=joint_state_minus_one,
+            nfa1_sync_state=joint_state,
             direction=Direction.BACKWARD,
         )
         forward_merged_nfa = self.merge(
             word_boundary_nfa,
-            nfa1_sync_state=joint_state_plus_one,
+            nfa1_sync_state=joint_state,
             direction=Direction.FORWARD,
         )
-        nonword_word_nfa = backward_merged_nfa.concatenate(
-            forward_merged_nfa,
-            # get synced states that contain the joint_state_minus_one as the first state
-            on_states=[s for s in backward_merged_nfa.states if s.states[0] == joint_state_minus_one],
-        ).simplify()
 
-        nonword_word_nfa.to_dot()
-        input()
+        nonword_word_nfa = None
+
+        if backward_merged_nfa and forward_merged_nfa:
+            # Concatenate the \W and \w synched NFAs
+            nonword_word_nfa = backward_merged_nfa.concatenate(
+                forward_merged_nfa,
+                # get synced states that contain the joint_state_minus_one as the first state
+                on_end_states=[
+                    s
+                    for s in backward_merged_nfa.states
+                    if s.is_exit_state()
+                ],
+                on_other_nfa_start_states=[
+                    s
+                    for s in forward_merged_nfa.states
+                    if s.is_entry_state()
+                ],
+            )
 
         # Stitch concatenated NFA to the original NFA
         # FIXME this is currently stitched at the end because _stitch is destructive for the original NFA
         #   If we stitch before, we might break the merge process for the second boundary NFA
-        self._stitch_synched_nfa(word_nonword_nfa)
-        self._stitch_synched_nfa(nonword_word_nfa)
+        if word_nonword_nfa:
+            self._stitch_synched_nfa(word_nonword_nfa)
+        if nonword_word_nfa:
+            self._stitch_synched_nfa(nonword_word_nfa)
 
         # Remove the original boundary
         self.remove_state(joint_state)
@@ -1418,16 +1437,17 @@ def intersect(nfa1: NFA, nfa2: NFA, nfa1_sync_state=None, nfa2_sync_state=None):
     return stitched_nfa
 
 
-if __name__ == "__main__":
-    # nfa2 = from_regex(r"[b-z]{3}[a-z\"']*\balert\b(abc|'as|\"else).").simplify()
-    nfa = from_regex(r".*\babcd").simplify()
-    nfa.to_dot()
-    input()
 
-    for b in nfa.boundaries:
+def main1():
+    # nfa2 = from_regex(r"[b-z]{3}[a-z\"']*\balert\b(abc|'as|\"else).").simplify()
+    nfa = from_regex(r".\b.\b.").simplify()
+
+    for b in nfa.boundaries[::-1]:
         nfa._merge_word_boundary(b)
         nfa.to_dot(view=True)
+        input()
 
+    nfa.to_dot(view=True, simplified=True)
     print(nfa.walk())
 
     print("debug")
@@ -1436,10 +1456,8 @@ def main2():
     r1 = from_regex(".*(?:[a-z'+]|abcd|lmno.)").simplify()
     r1.to_dot()
     print(r1.get_end_states())
-    input()
     r2 = from_regex("\w").simplify()
     r2.to_dot()
-    input()
 
     merged_nfa = r1.merge(
         r2,
@@ -1450,8 +1468,9 @@ def main2():
     )
 
     merged_nfa.to_dot()
-    input()
 
     r1._stitch_synched_nfa(merged_nfa)
     r1.to_dot(simplified=True)
 
+if __name__ == "__main__":
+    main1()
