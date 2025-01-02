@@ -191,6 +191,12 @@ class Boundary:
     def __init__(self, from_state, boundary_type):
         self.from_state = from_state
         self.boundary_type = boundary_type
+    
+    def __repr__(self) -> str:
+        return f"Boundary({self.from_state}, {self.boundary_type})"
+    
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 class NFA:
@@ -277,11 +283,6 @@ class NFA:
         merged_nfa.start_state = None
         merged_nfa.states = []
 
-        # print end states for nfa1 and nfa2
-        print("End states for nfa1", nfa1.get_end_states())
-        print("End states for nfa2", nfa2.get_end_states())
-        print("Direction:", direction)
-
         if nfa1_sync_state is None:
             if direction == Direction.FORWARD:
                 nfa1_sync_state = nfa1.start_state
@@ -321,39 +322,65 @@ class NFA:
             transitions1 = nfa1.get_transitions_from(sync_state.states[0], direction)
             transitions2 = nfa2.get_transitions_from(sync_state.states[1], direction)
 
-            # Consume any epsilon transitions in nfa1 and nfa2
-            # and create new synchronized states for each, if they don't exist already
-            for t1 in list(filter(lambda t: t.is_epsilon_transition(), transitions1)):
-                next_s1_state = t1.get_next_state(direction)
+            epsilon_transitions1 = list(
+                filter(lambda t: t.is_epsilon_transition(), transitions1)
+            )
+            epsilon_transitions2 = list(
+                filter(lambda t: t.is_epsilon_transition(), transitions2)
+            )
 
-                new_state_added, new_sync_state = (
-                    merged_nfa._add_merged_state_to_merged_nfa(
-                        next_s1_state,
-                        sync_state.states[1],
-                        "",
-                        sync_state,
-                        direction=direction,
+            if epsilon_transitions1 and epsilon_transitions2:
+                print("Both states have epsilon transitions")
+                for t1 in epsilon_transitions1:
+                    for t2 in epsilon_transitions2:
+                        new_state_added, new_sync_state = (
+                            merged_nfa._add_merged_state_to_merged_nfa(
+                                t1.get_next_state(direction),
+                                t2.get_next_state(direction),
+                                "",
+                                sync_state,
+                                direction=direction,
+                            )
+                        )
+
+                        if new_state_added:
+                            states_frontier.append(new_sync_state)
+
+
+            else:
+                # Consume any epsilon transitions in nfa1 and nfa2
+                # and create new synchronized states for each, if they don't exist already
+                for t1 in list(filter(lambda t: t.is_epsilon_transition(), transitions1)):
+                    next_s1_state = t1.get_next_state(direction)
+
+                    new_state_added, new_sync_state = (
+                        merged_nfa._add_merged_state_to_merged_nfa(
+                            next_s1_state,
+                            sync_state.states[1],
+                            "",
+                            sync_state,
+                            direction=direction,
+                        )
                     )
-                )
 
-                if new_state_added:
-                    states_frontier.append(new_sync_state)
+                    if new_state_added:
+                        states_frontier.append(new_sync_state)
 
-            for t2 in filter(lambda t: t.is_epsilon_transition(), transitions2):
-                next_s2_state = t2.get_next_state(direction)
+                for t2 in filter(lambda t: t.is_epsilon_transition(), transitions2):
+                    next_s2_state = t2.get_next_state(direction)
 
-                new_state_added, new_sync_state = (
-                    merged_nfa._add_merged_state_to_merged_nfa(
-                        sync_state.states[0],
-                        next_s2_state,
-                        "",
-                        sync_state,
-                        direction=direction,
+                    new_state_added, new_sync_state = (
+                        merged_nfa._add_merged_state_to_merged_nfa(
+                            sync_state.states[0],
+                            next_s2_state,
+                            "",
+                            sync_state,
+                            direction=direction,
+                        )
                     )
-                )
 
-                if new_state_added:
-                    states_frontier.append(new_sync_state)
+                    if new_state_added:
+                        states_frontier.append(new_sync_state)
 
             # For each transition from s1, check if there's a corresponding transition from s2
             # There could also be multiple transitions from s2 with the same symbol, in which case we need to create a new synchronized state for each
@@ -842,6 +869,11 @@ class NFA:
             self.remove_transition(t)
         for t in state.get_transitions(direction=Direction.BACKWARD):
             self.remove_transition(t)
+        
+        for b in self.boundaries:
+            if b.from_state == state:
+                self.boundaries.remove(b)
+
         self.states.remove(state)
 
     def to_dot(self, view=True, simplified=False):
@@ -1155,6 +1187,7 @@ class NFA:
         non_word_boundary_nfa = from_regex(r"\W").simplify()
         # nfa
         joint_state = boundary.from_state
+        print("[*] Merging word boundary on ", joint_state)
 
         # \w\W
         backward_merged_nfa = self.merge(
@@ -1229,10 +1262,22 @@ class NFA:
         #   If we stitch before, we might break the merge process for the second boundary NFA
         if word_nonword_nfa:
             self._stitch_synched_nfa(word_nonword_nfa)
+            # Transfer other boundaries to the original NFA
+            # (excluding the one we're currently processing)
+            for b in word_nonword_nfa.boundaries:
+                if b.from_state.states[0] != joint_state:
+                    self.boundaries.append(b)
+
         if nonword_word_nfa:
             self._stitch_synched_nfa(nonword_word_nfa)
+            # Transfer boundaries to the original NFA
+            # (excluding the one we're currently processing)
+            for b in nonword_word_nfa.boundaries:
+                if b.from_state.states[0] != joint_state:
+                    self.boundaries.append(b)
 
         # Remove the original boundary
+        self.boundaries.remove(boundary)
         self.remove_state(joint_state)
 
         return self
@@ -1439,13 +1484,15 @@ def intersect(nfa1: NFA, nfa2: NFA, nfa1_sync_state=None, nfa2_sync_state=None):
 
 
 def main1():
-    # nfa2 = from_regex(r"[b-z]{3}[a-z\"']*\balert\b(abc|'as|\"else).").simplify()
     nfa = from_regex(r".\b.\b.").simplify()
+    nfa = from_regex(r"[b-z+]{3}[a-z\"']*\balert\b(abc|'as|\"else).").simplify()
 
-    for b in nfa.boundaries[::-1]:
-        nfa._merge_word_boundary(b)
-        nfa.to_dot(view=True)
-        input()
+    while nfa.boundaries:
+        b = nfa.boundaries[0]
+        if b.from_state not in nfa:
+            nfa.boundaries.remove(b)
+            continue
+        nfa._merge_word_boundary(b).simplify()
 
     nfa.to_dot(view=True, simplified=True)
     print(nfa.walk())
