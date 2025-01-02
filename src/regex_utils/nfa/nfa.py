@@ -273,8 +273,6 @@ class NFA:
         :return:
         """
 
-        print("[*] Merging NFAs", direction)
-
         nfa1 = self.simplify()
         nfa2.simplify()
 
@@ -299,8 +297,6 @@ class NFA:
             nfa1_sync_state, nfa2_sync_state
         )
 
-        print("Starting synchronized state", starting_synchronized_state)
-
         merged_nfa.states.append(starting_synchronized_state)
 
         # FIXME: this is a workaround to fix the start state of the merged NFA
@@ -310,13 +306,8 @@ class NFA:
         states_frontier = deque([starting_synchronized_state])
 
         while states_frontier:
-            print(
-                "Frontier states",
-                [f"{sync_state}" for sync_state in states_frontier],
-            )
 
             sync_state = states_frontier.popleft()
-            print(f"Processing frontier state {sync_state}")
 
             # get all transitions from states in the synchronized states
             transitions1 = nfa1.get_transitions_from(sync_state.states[0], direction)
@@ -330,7 +321,6 @@ class NFA:
             )
 
             if epsilon_transitions1 and epsilon_transitions2:
-                print("Both states have epsilon transitions")
                 for t1 in epsilon_transitions1:
                     for t2 in epsilon_transitions2:
                         new_state_added, new_sync_state = (
@@ -409,25 +399,20 @@ class NFA:
 
         # propagate boundaries to synchronized states
         for b in nfa1.boundaries + nfa2.boundaries:
-            print(f"Boundary on state {b.from_state.id}")
             for sync_state in merged_nfa.states:
-                print(f" - Check on sync_state {sync_state}")
                 if (
                     b.from_state is sync_state.states[0]
                     or b.from_state is sync_state.states[1]
                 ):
                     merged_nfa.boundaries.append(Boundary(sync_state, b.boundary_type))
-                    print(f"Appending boundary to state {sync_state}")
                     # TODO check if boundaries are transferred to the original NFA
 
-        print("Merge done")
         return merged_nfa
 
     def merge_boundaries(self):
         for b in list(self.boundaries):
             if b.from_state not in self.states:
                 break
-            print(b)
             # Word boundaries
             if b.boundary_type == sre_constants.AT_BOUNDARY:
                 self._merge_word_boundary(b)
@@ -616,7 +601,7 @@ class NFA:
         try:
             self.states.remove(removed_state)
         except ValueError:
-            print("Cannot remove state", removed_state.id)
+            print("Cannot remove state", removed_state)
 
         return self
 
@@ -671,7 +656,7 @@ class NFA:
                 == len(list(filter(lambda x: x.is_end_state, self.states)))
             ):
                 if rounds > budget:
-                    print("Simplify reached budget")
+                    print("[!] Simplify reached budget")
                 break
 
         # self._rewrite_states_ids()
@@ -918,7 +903,6 @@ class NFA:
         for t in self.transitions:
             if t in excluded_transitions:
                 continue
-            # print("- Drawing round for transition ", t.from_state.id, t.to_state.id, t.symbol)
             symbols = set()
             same_transitions = self._get_parallel_transitions(
                 t, get_epsilon_transitions=True
@@ -927,12 +911,10 @@ class NFA:
                 symbols.update(t.symbol for t in same_transitions)
 
             if "" in symbols:
-                # print("Creating Transition", t.from_state.id, t.to_state.id, "ε")
                 dot.edge(str(t.from_state.id), str(t.to_state.id), label="ε")
                 symbols = symbols - {""}
 
             if t.symbol:
-                # print("Add symbol", t.symbol)
                 symbols.add(t.symbol)
 
             label = utils.range_label(symbols)
@@ -946,7 +928,6 @@ class NFA:
                 )
 
             for st in same_transitions:
-                # print("Removing transition", st.from_state.id, st.to_state.id, st.symbol)
                 excluded_transitions.append(st)
 
         # Workaround to mark start state
@@ -1043,10 +1024,8 @@ class NFA:
                 if transitions:
                     for t in transitions:
                         self.remove_transition(t)
-                    # print("Found parallel transitions between", s.id, "and", s2.id)
                     # Create a new transition
                     symbols = set(t.symbol for t in transitions)
-                    # print("Symbols", symbols)
                     if all(len(symbol) == 1 or not symbol for symbol in symbols):
                         label = utils.range_label(symbols - {""})
                     else:
@@ -1061,9 +1040,6 @@ class NFA:
                         else:
                             label = f"(?:{label})?"
                     self.set_transition(label, s, s2)
-                    # print("Merging transitions", "|".join([t.symbol for t in transitions]), "from", s.id, "to", s2.id)
-                    # Remove old transitions
-                    # print("Out transitions", s.get_transitions())
 
         return self
 
@@ -1094,9 +1070,6 @@ class NFA:
                 )
             )
 
-            # print("Eliminating state", state_to_eliminate.id, "with", len(state_to_eliminate.get_transitions()), "out transitions", "and", len(state_to_eliminate.get_transitions(direction=Direction.BACKWARD)), "in transitions")
-            # print("\tOut transitions", [(t.symbol, t.to_state.id) for t in state_to_eliminate.get_transitions()])
-            # print("\tIn transitions", [(t.symbol, t.from_state.id) for t in state_to_eliminate.get_transitions(direction=Direction.BACKWARD)])
             # get all In and Out states
             #  if In state == Out state ( == State to eliminate) => (transition)*
             out_transitions = state_to_eliminate.get_transitions()
@@ -1127,7 +1100,6 @@ class NFA:
                 for t2 in list(in_transitions):
                     if t2.to_state is not t.to_state:
                         # Create a new transition
-                        # print("Creating transition", t2.symbol + self_loop_transition_label + t.symbol, "from", t2.from_state.id, "to", t.to_state.id)
                         # FIXME this is super hacky, it could break in the future
                         first_transition_label = (
                             f"(?:{t2.symbol})" if "|" in t2.symbol else t2.symbol
@@ -1187,7 +1159,6 @@ class NFA:
         non_word_boundary_nfa = from_regex(r"\W").simplify()
         # nfa
         joint_state = boundary.from_state
-        print("[*] Merging word boundary on ", joint_state)
 
         # \w\W
         backward_merged_nfa = self.merge(
@@ -1281,6 +1252,22 @@ class NFA:
         self.remove_state(joint_state)
 
         return self
+    
+    def flatten_lookarounds(self):
+        """
+        Flatten lookarounds in the NFA
+        # TODO implement it for other lookarounds, currently only word boundaries
+        :return:
+        """
+        while self.boundaries:
+            b = self.boundaries[0]
+            if b.from_state not in self:
+                self.boundaries.remove(b)
+                continue
+            self._merge_word_boundary(b).simplify()
+        
+        return self
+
 
 
 def from_regex(regex):
@@ -1485,39 +1472,16 @@ def intersect(nfa1: NFA, nfa2: NFA, nfa1_sync_state=None, nfa2_sync_state=None):
 
 def main1():
     nfa = from_regex(r".\b.\b.").simplify()
-    nfa = from_regex(r"[b-z+]{3}[a-z\"']*\balert\b(abc|'as|\"else).").simplify()
-
-    while nfa.boundaries:
-        b = nfa.boundaries[0]
-        if b.from_state not in nfa:
-            nfa.boundaries.remove(b)
-            continue
-        nfa._merge_word_boundary(b).simplify()
-
+    nfa = from_regex(r".*\balert\b.*").simplify()
     nfa.to_dot(view=True, simplified=True)
+    input()
+
+    nfa.flatten_lookarounds()
+
+    nfa.to_dot(view=True)
     print(nfa.walk())
 
     print("debug")
-
-def main2():
-    r1 = from_regex(".*(?:[a-z'+]|abcd|lmno.)").simplify()
-    r1.to_dot()
-    print(r1.get_end_states())
-    r2 = from_regex("\w").simplify()
-    r2.to_dot()
-
-    merged_nfa = r1.merge(
-        r2,
-        # nfa1_sync_state=r1.get_end_states()[0],
-        # nfa2_sync_state=r2.get_end_states()[0],
-        direction=Direction.BACKWARD,
-        # direction=Direction.FORWARD,
-    )
-
-    merged_nfa.to_dot()
-
-    r1._stitch_synched_nfa(merged_nfa)
-    r1.to_dot(simplified=True)
 
 if __name__ == "__main__":
     main1()
