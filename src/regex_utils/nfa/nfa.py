@@ -1480,6 +1480,7 @@ def main1():
 
     nfa.to_dot(view=True)
     print(nfa.walk())
+    print(nfa.to_regex())
 
     print("debug")
 
