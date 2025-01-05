@@ -1,5 +1,4 @@
 import copy
-import random
 import sre_constants
 import sre_parse
 
@@ -7,8 +6,8 @@ import graphviz
 from graphviz.quoting import *
 from collections import deque
 
-from regex_utils.nfa import utils
-from regex_utils.dfa import DFA, State, SynchronizedState, Transition, Direction
+from regex_utils.utils import utils
+from regex_utils.dfa import DFA, State, SynchronizedState, StateSet, Transition, Direction
 
 
 ENUM_LOOKAROUND_TYPE = {
@@ -64,10 +63,8 @@ class NFA(DFA):
         return not self.is_empty()
 
     def __contains__(self, item):
-        if isinstance(item, State) or isinstance(item, SynchronizedState):
-            return item in self.states
-        elif isinstance(item, Transition):
-            return item in self.transitions
+        if isinstance(item, State) or isinstance(item, SynchronizedState) or isinstance(item, Transition):
+            return super().__contains__(item)
         elif isinstance(item, Lookaround):
             return item in self.lookarounds
         elif isinstance(item, Boundary):
@@ -254,34 +251,6 @@ class NFA(DFA):
 
         return merged_nfa
 
-    def merge_boundaries(self):
-        for b in list(self.boundaries):
-            if b.from_state not in self.states:
-                break
-            # Word boundaries
-            if b.boundary_type == sre_constants.AT_BOUNDARY:
-                self._merge_word_boundary(b)
-
-        return self
-
-    def _epsilon_closure(self, state) -> set:
-        closure = {state}
-        while True:
-            previous_closure = closure.copy()
-
-            for t in state.get_transitions():
-                if t.is_epsilon_transition():
-                    closure.add(t.to_state)
-
-            for t in state.get_transitions(direction=Direction.BACKWARD):
-                if t.is_epsilon_transition():
-                    closure.add(t.from_state)
-
-            if closure == previous_closure:
-                break
-
-        return closure
-
     def get_transitions_from(self, state_or_closure, direction=Direction.FORWARD):
         if isinstance(state_or_closure, State) or isinstance(
             state_or_closure, SynchronizedState
@@ -316,82 +285,6 @@ class NFA(DFA):
         self.lookarounds.extend(other_nfa.lookarounds)
         self.boundaries.extend(other_nfa.boundaries)
         return self
-
-    def get_end_states(self):
-        return list(filter(lambda x: x.is_end_state, self.states))
-
-    def reset(self):
-        self.current_state = self.start_state
-
-    def step(self):
-        if self.current_state.get_transitions():
-            t = random.choice(self.current_state.get_transitions())
-            self.consume(t)
-            return t.symbol
-        else:
-            return None
-
-    def walk(self, continue_after_end_state=0.0):
-        # TODO: add new walk techniques, e.g., weight walk on transitions that were already taken (to avoid being stuck in loops)
-        self.reset()
-
-        symbols = []
-        while True:  # Otherwise it will stop at empty strings (epsilon-transitions)
-            new_symbol = self.step()
-            # raise error if stuck in dead end (i.e., new_symbol is None)
-            # This usually means that the NFA does not exist, but it could also be a construction/simplification error
-            if new_symbol is None:
-                raise ValueError(
-                    f"NFA is stuck in a dead end\nafter symbols: {symbols}"
-                )
-
-            symbols.append(new_symbol)
-            if self.current_state.is_end_state:
-                # Avoid generating a random number if continue_after_end_state is set to 0
-                if (
-                    continue_after_end_state == 0.0
-                    or random.random() > continue_after_end_state
-                    or not self.current_state.get_transitions()
-                ):
-                    break
-
-        return "".join(symbols)
-
-    def consume(self, transition):
-        self.current_state = transition.to_state
-
-    def append_transition(self, symbol):
-        s = State()
-        t = Transition(symbol, self.current_state, s)
-        t.from_state.out_transitions.append(t)
-        t.to_state.get_transitions(direction=Direction.BACKWARD).append(t)
-        # Add transition and new state to the NFA
-        self.transitions.append(t)
-        self.states.append(s)
-        self.current_state.is_end_state = False
-        self.consume(t)
-        return self
-
-    def set_transition(
-        self, symbol, from_state, to_state, direction=Direction.FORWARD, deep=True
-    ):
-        if direction == Direction.FORWARD:
-            new_transition = Transition(symbol, from_state, to_state)
-        elif direction == Direction.BACKWARD:
-            new_transition = Transition(symbol, to_state, from_state)
-
-        if new_transition not in self:
-            self.transitions.append(new_transition)
-
-        if deep:
-            new_transition.get_next_state(Direction.BACKWARD).get_transitions(
-                Direction.FORWARD
-            ).append(new_transition)
-            new_transition.get_next_state(Direction.FORWARD).get_transitions(
-                Direction.BACKWARD
-            ).append(new_transition)
-
-        return new_transition
 
     def set_epsilon_transition(self, from_state, to_state):
         return self.set_transition("", from_state, to_state)
@@ -1086,9 +979,9 @@ class NFA(DFA):
     def flatten_lookarounds(self):
         """
         Flatten lookarounds in the NFA
-        # TODO implement it for other lookarounds, currently only word boundaries
         :return:
         """
+        # TODO implement it for other lookarounds, currently only word boundaries
         while self.boundaries:
             b = self.boundaries[0]
             if b.from_state not in self:
@@ -1097,6 +990,76 @@ class NFA(DFA):
             self._merge_word_boundary(b).simplify()
 
         return self
+
+    def _epsilon_closure(self, state) -> set:
+        """
+        Get the epsilon closure of a state
+        :param state:
+        :return:
+        """
+
+        closure = set()
+        starting_states = []
+
+        if isinstance(state, StateSet):
+            starting_states.extend(state.states)
+        elif isinstance(state, State):
+            starting_states.append(state)
+        else:
+            raise ValueError("Invalid state type")
+
+        frontier = deque(starting_states)
+        while frontier:
+            current_state = frontier.popleft()
+            closure.add(current_state)
+            for t in current_state.get_transitions(symbol=""):
+                epsilon_state = t.get_next_state()
+                if epsilon_state not in closure:
+                    frontier.append(t.get_next_state())
+
+        return closure
+
+    def to_dfa(self):
+        """
+        Convert the NFA to a DFA using the powerset construction algorithm.
+        :return:
+        """
+        print("[*] Converting NFA to DFA")
+
+        dfa = DFA(
+            alphabet=self.alphabet,
+            start_state=StateSet(
+                *self._epsilon_closure(self.start_state),
+                start_state=True,
+            ),
+        )
+
+        frontier = deque([dfa.start_state])
+
+        while frontier:
+            current_dfa_state = frontier.popleft()
+
+            for symbol in self.alphabet:
+                all_transitions_for_symbol = current_dfa_state.get_inner_transitions(symbol=symbol)
+
+                next_nfa_states = set(
+                        s
+                        for t in all_transitions_for_symbol
+                        for s in self._epsilon_closure(t.get_next_state())
+                )
+
+                next_dfa_state = StateSet(*next_nfa_states)
+
+                if next_dfa_state not in dfa:
+                    dfa.states.append(next_dfa_state)
+                    frontier.append(next_dfa_state)
+
+                    dfa.set_transition(symbol, current_dfa_state, next_dfa_state)
+                else:
+                    equivalent_state = dfa.get_equivalent_state(next_dfa_state)
+                    dfa.set_transition(symbol, current_dfa_state, equivalent_state)
+
+        return dfa
 
 
 def from_regex(regex):
@@ -1247,8 +1210,7 @@ def alternate(*nfas):
 
 
 def negate(nfa):
-    # TODO refactor as DFA negation
-    raise NotImplementedError("Negation is not implemented for DFAs")
+    return from_dfa(nfa.to_dfa().negate())
 
 
 def intersect(nfa1: NFA, nfa2: NFA, nfa1_sync_state=None, nfa2_sync_state=None):
@@ -1272,6 +1234,21 @@ def intersect(nfa1: NFA, nfa2: NFA, nfa1_sync_state=None, nfa2_sync_state=None):
     return stitched_nfa
 
 
+def from_dfa(dfa):
+    """
+    Convert a DFA to an NFA
+    :param dfa:
+    :return:
+    """
+    nfa = NFA()
+    nfa.alphabet = dfa.alphabet
+    nfa.states = dfa.states
+    nfa.transitions = dfa.transitions
+    nfa.start_state = dfa.start_state
+
+    return nfa
+
+
 def main1():
     nfa = from_regex(r".\b.\b.").simplify()
 
@@ -1284,5 +1261,15 @@ def main1():
     print("debug")
 
 
+def main2():
+    nfa = from_regex(r".*(abc|abd).*").simplify()
+
+    nfa = negate(from_dfa(nfa.to_dfa()))
+
+    nfa.to_dot(view=True, simplified=True)
+
+    print(nfa.to_regex())
+
+
 if __name__ == "__main__":
-    main1()
+    main2()

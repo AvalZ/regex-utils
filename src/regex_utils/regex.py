@@ -12,8 +12,7 @@ class Regex:
         if regex_nfa and not regex_string:
             self.regex_string = regex_nfa.to_regex()
 
-        if self.regex_nfa.boundaries:
-            self.regex_nfa.merge_boundaries().simplify()
+        self.regex_nfa.flatten_lookarounds()
 
     def __str__(self):
         return self.to_string()
@@ -100,7 +99,7 @@ def intersect(*regexes):
     :param regexes: a list of regex strings or Regex objects
     :return: resulting regex
     """
-    regexes = [Regex(r) if type(r) == str else r for r in regexes]
+    regexes = [Regex(r) if isinstance(r, str) else r for r in regexes]
     nfas = [r.regex_nfa for r in regexes]
 
     intersection = nfas[0]
@@ -115,21 +114,17 @@ def intersect(*regexes):
 
 
 if __name__ == "__main__":
-    r1 = from_string(r"[ab].(qualcosa|norme)boh")
-    r2 = from_string(r"[ab].*\W(qualcosa|norme)boh")
-    # r1 = from_string(r".*z[a-z]bcd")
-    # r2 = from_string(r".*zabc[a-z]")
-    # (?=abcd)(?=.*z$)[a-z]*
-    # (?!abcd)[a-z]*
-    # abcd[a-z]{26}
+    r1 = from_string(r".*")
+    r2 = from_string(r"[!=]=|&&|\|\||->|>[=>]|<(?:[<=]|>(?:[\s\x0b]+binary)?)|\b(?:(?:xor|r(?:egexp|like)|i(?:snull|like)|notnull)\b|collate(?:[^0-9A-Z_a-z]*?(?:U&)?[\"'`]|[^0-9A-Z_a-z]+(?:(?:binary|nocase|rtrim)\b|[0-9A-Z_a-z]*?_))|(?:likel(?:ihood|y)|unlikely)[\s\x0b]*\()|r(?:egexp|like)[\s\x0b]+binary|not[\s\x0b]+between[\s\x0b]+(?:0[\s\x0b]+and|(?:'[^']*'|\"[^\"]*\")[\s\x0b]+and[\s\x0b]+(?:'[^']*'|\"[^\"]*\"))|is[\s\x0b]+null|like[\s\x0b]+(?:null|[0-9A-Z_a-z]+[\s\x0b]+escape\b)|(?:^|[^0-9A-Z_a-z])in[\s\x0b\+]*\([\s\x0b\"0-9]+[^\(\)]*\)|[!<->][\s\x0b]*all\b")
 
     r_intersect = intersect(r1, r2)
 
     r_intersect.to_dot(view=True)
 
-    print(r_intersect.generate_sample())
-
     print(r_intersect.to_string())
+
+    for _ in range(100):
+        print(r_intersect.generate_sample())
 
 
 def main2():
