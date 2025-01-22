@@ -7,9 +7,6 @@ def test_to_regex():
 
 
 def test_intersection():
-    assert "abc" == regex.intersect("ab[a-z]", "abc*").to_string()
+    r = regex.intersect("ab[a-z]", "abc*")
 
-
-def test_to_dot():
-    # regex.from_string("ab[a-z]d*").to_dot()
-    pass
+    assert "abc" == r.to_string()

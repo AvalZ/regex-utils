@@ -7,7 +7,14 @@ from graphviz.quoting import *
 from collections import deque
 
 from regex_utils.utils import utils
-from regex_utils.dfa import DFA, State, SynchronizedState, StateSet, Transition, Direction
+from regex_utils.dfa import (
+    DFA,
+    State,
+    SynchronizedState,
+    StateSet,
+    Transition,
+    Direction,
+)
 
 
 ENUM_LOOKAROUND_TYPE = {
@@ -63,7 +70,11 @@ class NFA(DFA):
         return not self.is_empty()
 
     def __contains__(self, item):
-        if isinstance(item, State) or isinstance(item, SynchronizedState) or isinstance(item, Transition):
+        if (
+            isinstance(item, State)
+            or isinstance(item, SynchronizedState)
+            or isinstance(item, Transition)
+        ):
             return super().__contains__(item)
         elif isinstance(item, Lookaround):
             return item in self.lookarounds
@@ -1040,12 +1051,14 @@ class NFA(DFA):
             current_dfa_state = frontier.popleft()
 
             for symbol in self.alphabet:
-                all_transitions_for_symbol = current_dfa_state.get_inner_transitions(symbol=symbol)
+                all_transitions_for_symbol = current_dfa_state.get_inner_transitions(
+                    symbol=symbol
+                )
 
                 next_nfa_states = set(
-                        s
-                        for t in all_transitions_for_symbol
-                        for s in self._epsilon_closure(t.get_next_state())
+                    s
+                    for t in all_transitions_for_symbol
+                    for s in self._epsilon_closure(t.get_next_state())
                 )
 
                 next_dfa_state = StateSet(*next_nfa_states)
@@ -1229,9 +1242,9 @@ def intersect(nfa1: NFA, nfa2: NFA, nfa1_sync_state=None, nfa2_sync_state=None):
     nfa2.simplify()
 
     merged_nfa = nfa1.merge(nfa2)
-    stitched_nfa = nfa1._stitch_synched_nfa(merged_nfa)
+    # stitched_nfa = nfa1._stitch_synched_nfa(merged_nfa)
 
-    return stitched_nfa
+    return merged_nfa
 
 
 def from_dfa(dfa):
@@ -1264,7 +1277,7 @@ def main1():
 def main2():
     nfa = from_regex(r".*(abc|abd).*").simplify()
 
-    nfa = negate(from_dfa(nfa.to_dfa()))
+    nfa = negate(from_dfa(nfa.to_dfa().minimize()))
 
     nfa.to_dot(view=True, simplified=True)
 

@@ -4,7 +4,12 @@ import re
 
 ALPHABET = set([chr(i) for i in range(0, 256)])
 
-WORDCHARACTERS = set([chr(i) for i in range(48, 58)]) | set([chr(i) for i in range(65, 91)]) | set([chr(i) for i in range(97, 123)]) | set(["_"])
+WORDCHARACTERS = (
+    set([chr(i) for i in range(48, 58)])
+    | set([chr(i) for i in range(65, 91)])
+    | set([chr(i) for i in range(97, 123)])
+    | set(["_"])
+)
 NONWORDCHARACTERS = ALPHABET - WORDCHARACTERS
 SPACECHARACTERS = set([chr(i) for i in range(9, 14)] + [" "])
 

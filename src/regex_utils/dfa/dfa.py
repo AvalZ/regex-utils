@@ -1,3 +1,4 @@
+import itertools
 import random
 
 from .transition import Direction, Transition
@@ -117,10 +118,10 @@ class DFA:
                 print(f"\t {t}")
             for t in sorted(s.get_transitions(), key=lambda x: x.symbol):
                 print(f"\t\t -{t}")
-    
+
     def get_equivalent_state(self, state):
         return next((s for s in self.states if s == state), None)
-    
+
     def negate(self):
         """
         Negate the DFA
@@ -129,3 +130,32 @@ class DFA:
             state.is_end_state = not state.is_end_state
 
         return self
+
+    def minimize(self):
+        """
+        Minimize the DFA using the Hopcroft's algorithm
+        """
+        # Step 0: Create the initial partitions P0 dividing states into accepting and non-accepting states
+        current_partitions = [
+            self.get_end_states(),
+            [s for s in self.states if not s.is_end_state],
+        ]
+
+        while True:
+            # Save the old partitions
+            old_partitions = current_partitions
+
+            # Step 1: Create the next partition Pk+1
+            for partition in current_partitions:
+                for pair in itertools.combinations(partition, 2):
+                    for symbol in self.alphabet:
+                        destination_0 = pair[0].get_transitions(symbol).get_next_state()
+                        destination_1 = pair[1].get_transitions(symbol).get_next_state()
+
+                        if destination_0 == destination_1:
+                            continue
+                        else:
+                            # Check if destinations are in the same partition or in different ones
+                            for p in current_partitions:
+                                # TODO
+                                pass

@@ -39,7 +39,7 @@ class State:
             transitions = list(filter(lambda x: x.symbol == symbol, transitions))
 
         return transitions
-    
+
     def _get_all_transitions_based_on_direction(self, direction):
         transitions = []
         if direction == Direction.FORWARD:
@@ -95,11 +95,7 @@ class SynchronizedState(State):
 class StateSet(State):
 
     def __init__(self, *states, start_state=None, end_state=None, id=None):
-        super().__init__(
-            start_state=start_state,
-            end_state=end_state,
-            id=id
-        )
+        super().__init__(start_state=start_state, end_state=end_state, id=id)
         self.states = states
 
         if not self.is_end_state:
@@ -123,14 +119,16 @@ class StateSet(State):
 
     def __hash__(self) -> int:
         return hash(frozenset(self.states))
-    
+
     def is_dead_state(self):
         return self.states == set()
-    
+
     def get_inner_transitions(self, direction=Direction.FORWARD, symbol=None):
         transitions = []
         for state in self.states:
-            transitions.extend(state.get_transitions(direction=direction, symbol=symbol))
+            transitions.extend(
+                state.get_transitions(direction=direction, symbol=symbol)
+            )
         return transitions
 
     def get_inner_states(self):
