@@ -413,7 +413,6 @@ class NFA(DFA):
                     print("[!] Simplify reached budget")
                 break
 
-        # self._rewrite_states_ids()
         return self
 
     def _remove_dead_start_states(self):
