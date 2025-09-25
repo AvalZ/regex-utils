@@ -1,53 +1,53 @@
-from regex_utils.derivatives.parser import CharacterRange, RangeType
+from regex_utils.derivatives.parser import CharacterSet, RangeType
 
-def test_character_range_repr_positive():
-    """Test string representation of positive character ranges"""
-    # Test lowercase range
-    range_az = CharacterRange('a', 'z')
-    assert str(range_az) == "[a-z]"
+def test_character_set_repr_positive():
+    """Test string representation of positive character sets"""
+    # Test lowercase set
+    set_abc = CharacterSet(['a', 'b', 'c'])
+    assert str(set_abc) == "[abc]"
     
-    # Test uppercase range
-    range_AZ = CharacterRange('A', 'Z')
-    assert str(range_AZ) == "[A-Z]"
+    # Test uppercase set
+    set_ABC = CharacterSet(['A', 'B', 'C'])
+    assert str(set_ABC) == "[ABC]"
     
-    # Test numeric range
-    range_09 = CharacterRange('0', '9')
-    assert str(range_09) == "[0-9]"
+    # Test numeric set
+    set_012 = CharacterSet(['0', '1', '2'])
+    assert str(set_012) == "[012]"
     
-    # Test custom range
-    range_fk = CharacterRange('f', 'k')
-    assert str(range_fk) == "[f-k]"
+    # Test custom set
+    set_fghk = CharacterSet(['f', 'g', 'h', 'k'])
+    assert str(set_fghk) == "[fghk]"
     
-    # Test range with special characters
-    range_special = CharacterRange('[', ']')
-    assert str(range_special) == r"[\[-\]]"
+    # Test set with special characters
+    set_special = CharacterSet(['[', ']'])
+    assert str(set_special) == r"[\[\]]"
     
-    # Test range with backslash
-    range_escape = CharacterRange('\\', '^')
-    assert str(range_escape) == r"[\\-\^]"
+    # Test set with backslash
+    set_escape = CharacterSet(['\\', '^'])
+    assert str(set_escape) == r"[\\^]"
 
-def test_character_range_repr_negative():
-    """Test string representation of negative character ranges"""
-    # Test lowercase range
-    range_not_az = CharacterRange('a', 'z', RangeType.NEGATIVE)
-    assert str(range_not_az) == "[^a-z]"
+def test_character_set_repr_negative():
+    """Test string representation of negative character sets"""
+    # Test lowercase set
+    set_not_abc = CharacterSet(['a', 'b', 'c'], RangeType.NEGATIVE)
+    assert str(set_not_abc) == "[^abc]"
     
-    # Test uppercase range
-    range_not_AZ = CharacterRange('A', 'Z', RangeType.NEGATIVE)
-    assert str(range_not_AZ) == "[^A-Z]"
+    # Test uppercase set
+    set_not_ABC = CharacterSet(['A', 'B', 'C'], RangeType.NEGATIVE)
+    assert str(set_not_ABC) == "[^ABC]"
     
-    # Test numeric range
-    range_not_09 = CharacterRange('0', '9', RangeType.NEGATIVE)
-    assert str(range_not_09) == "[^0-9]"
+    # Test numeric set
+    set_not_012 = CharacterSet(['0', '1', '2'], RangeType.NEGATIVE)
+    assert str(set_not_012) == "[^012]"
     
-    # Test custom range
-    range_not_fk = CharacterRange('f', 'k', RangeType.NEGATIVE)
-    assert str(range_not_fk) == "[^f-k]"
+    # Test custom set
+    set_not_fghk = CharacterSet(['f', 'g', 'h', 'k'], RangeType.NEGATIVE)
+    assert str(set_not_fghk) == "[^fghk]"
     
-    # Test negative range with special characters
-    range_not_special = CharacterRange('[', ']', RangeType.NEGATIVE)
-    assert str(range_not_special) == r"[^\[-\]]"
+    # Test negative set with special characters
+    set_not_special = CharacterSet(['[', ']'], RangeType.NEGATIVE)
+    assert str(set_not_special) == r"[^\[\]]"
     
-    # Test negative range with backslash
-    range_not_escape = CharacterRange('\\', '^', RangeType.NEGATIVE)
-    assert str(range_not_escape) == r"[^\\-\^]"
+    # Test negative set with backslash
+    set_not_escape = CharacterSet(['\\', '^'], RangeType.NEGATIVE)
+    assert str(set_not_escape) == r"[^\\^]"

@@ -1,4 +1,4 @@
-from regex_utils.derivatives.parser import CharacterSet
+from regex_utils.derivatives.parser import CharacterSet, RangeType
 
 def test_character_set_init():
     """Test CharacterSet initialization with both list and set"""
@@ -31,30 +31,36 @@ def test_character_set_special_chars():
     assert set(regex_chars.characters) == {'.', '*', '+', '?', '|', '(', ')', '{', '}'}
     assert all(c in str(regex_chars) for c in [r'\(', r'\)', r'\+', r'\.', r'\?', r'\{', r'\|', r'\}', r'\*'])
 
-def test_character_set_with_ranges():
-    """Test CharacterSet with embedded CharacterRange objects"""
-    from regex_utils.derivatives.parser import CharacterRange
+def test_character_set_with_multichars():
+    """Test CharacterSet with characters that span a range"""
+    # Test lowercase letters
+    charset = CharacterSet(['a', 'b', 'c', 'd', 'e'])
+    assert charset.characters == ['a', 'b', 'c', 'd', 'e']
+    assert str(charset) == '[abcde]'
     
-    # Test with a single range
-    simple_range = CharacterRange('a', 'z')
-    charset = CharacterSet([simple_range])
-    assert charset.characters == [simple_range]
-    assert str(charset) == '[a-z]'
+    # Test mixed case and digits
+    charset = CharacterSet(['a', 'b', 'c', 'A', 'B', 'C', '0', '1', '2'])
+    assert charset.characters == ['a', 'b', 'c', 'A', 'B', 'C', '0', '1', '2']
+    assert str(charset) == '[abcABC012]'
     
-    # Test with multiple ranges
-    az = CharacterRange('a', 'z')
-    AZ = CharacterRange('A', 'Z')
-    digits = CharacterRange('0', '9')
-    charset = CharacterSet([az, AZ, digits])
-    assert charset.characters == [az, AZ, digits]
-    assert str(charset) == '[a-zA-Z0-9]'
+    # Test with underscore and digits
+    charset = CharacterSet(['a', 'b', 'c', '_', '0', '1', '2'])
+    assert charset.characters == ['a', 'b', 'c', '_', '0', '1', '2']
+    assert str(charset) == '[abc_012]'
     
-    # Test mix of ranges and single characters
-    charset = CharacterSet([az, '_', digits])
-    assert charset.characters == [az, '_', digits]
-    assert str(charset) == '[a-z_0-9]'
-    
-    # Test range with special characters
-    special_range = CharacterRange('.', '?')
-    charset = CharacterSet([special_range])
-    assert str(charset) == r'[\.-\?]'
+    # Test with special characters
+    charset = CharacterSet(['.', '/', '?'])
+    # FIXME: escaping ? is not really needed in [], might be overkill in this case
+    assert str(charset) == r'[\.\/\?]'
+
+def test_contains_for_charset():
+
+    charset = CharacterSet(['a', 'b', 'c'])
+    assert 'a' in charset
+    assert 'd' not in charset 
+
+def test_contains_for_negative_charset():
+
+    negative_charset = CharacterSet(['a', 'b', 'c'], range_type=RangeType.NEGATIVE)
+    assert 'a' not in negative_charset
+    assert 'd' in negative_charset

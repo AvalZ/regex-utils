@@ -1,6 +1,5 @@
 from regex_utils.derivatives.parser import (
     RegexExpr,
-    CharacterRange,
     CharacterSet,
     Concatenation,
     Alternation,
@@ -8,96 +7,96 @@ from regex_utils.derivatives.parser import (
     RangeType,
 )
 
-def test_character_range_single():
-    """Test that a CharacterRange with same start and end is printed without range operator"""
-    range_a = CharacterRange('a', 'a')
-    assert str(range_a) == "a"
+def test_character_set_single():
+    """Test CharacterSet with single characters"""
+    char_a = CharacterSet(['a'])
+    assert str(char_a) == "[a]"
 
-    # Test negative range with same start and end
-    range_not_a = CharacterRange('a', 'a', RangeType.NEGATIVE)
-    assert str(range_not_a) == "[^a]"
+    # Test negative set with single character
+    not_a = CharacterSet(['a'], range_type=RangeType.NEGATIVE)
+    assert str(not_a) == "[^a]"
 
 def test_concatenation():
     """Test concatenation of regex expressions"""
     # Test with single token
-    range_az = CharacterRange('a', 'z')
-    regex = Concatenation([range_az])
-    assert str(regex) == "[a-z]"
+    letters = CharacterSet(['a', 'b', 'c', 'd', 'e', 'f'])
+    regex = Concatenation([letters])
+    assert str(regex) == "[abcdef]"
 
     # Test with multiple tokens
     charset = CharacterSet(['x', 'y', 'z'])
-    regex = Concatenation([range_az, charset])
-    assert str(regex) == "[a-z][xyz]"
+    regex = Concatenation([letters, charset])
+    assert str(regex) == "[abcdef][xyz]"
 
 def test_alternation():
     """Test alternation of regex expressions"""
     # Create tokens
-    range_az = CharacterRange('a', 'z')
-    charset = CharacterSet(['0', '1', '2'])
-    range_AZ = CharacterRange('A', 'Z')
+    lower = CharacterSet(['a', 'b', 'c'])
+    digits = CharacterSet(['0', '1', '2'])
+    upper = CharacterSet(['X', 'Y', 'Z'])
     
     # Test alternation of multiple expressions
-    regex = Alternation([range_az, charset, range_AZ])
-    assert str(regex) == "([a-z]|[012]|[A-Z])"
+    regex = Alternation([lower, digits, upper])
+    assert str(regex) == "([abc]|[012]|[XYZ])"
 
 def test_nested_expressions():
     """Test nested regex expressions"""
     # Create inner concatenation
     inner = Concatenation([
-        CharacterRange('0', '9'),
+        CharacterSet(['0', '1', '2']),
         CharacterSet(['_'])
     ])
     
     # Create outer alternation with the inner concatenation
     outer = Alternation([
-        CharacterRange('a', 'z'),
+        CharacterSet(['a', 'b', 'c']),
         inner,
-        CharacterRange('A', 'Z')
+        CharacterSet(['X', 'Y', 'Z'])
     ])
     
-    assert str(outer) == "([a-z]|([0-9][_])|[A-Z])"
+    assert str(outer) == "([abc]|([012][_])|[XYZ])"
 
 def test_kleene_star():
     """Test Kleene star operation"""
-    # Simple character range
-    range_az = CharacterRange('a', 'z')
-    star = KleeneStar(range_az)
-    assert str(star) == "[a-z]*"
+    # Simple character set
+    letters = CharacterSet(['a', 'b', 'c'])
+    star = KleeneStar(letters)
+    assert str(star) == "[abc]*"
     
     # More complex expression
     concat = Concatenation([
-        CharacterRange('a', 'z'),
+        CharacterSet(['a', 'b', 'c']),
         CharacterSet(['0', '1'])
     ])
     star = KleeneStar(concat)
-    assert str(star) == "([a-z][01])*"
+    assert str(star) == "([abc][01])*"
 
 def test_complex_expression():
     """Test a more complex regex expression"""
-    # Build (a-z|[0-9]_)*[A-Z]
+    # Build ([abc]|[012]_)*[XYZ]
     inner_alt = Alternation([
-        CharacterRange('a', 'z'),
+        CharacterSet(['a', 'b', 'c']),
         Concatenation([
-            CharacterRange('0', '9'),
+            CharacterSet(['0', '1', '2']),
             CharacterSet(['_'])
         ])
     ])
     star_part = KleeneStar(inner_alt)
-    upper_range = CharacterRange('A', 'Z')
+    upper = CharacterSet(['X', 'Y', 'Z'])
     
-    regex = Concatenation([star_part, upper_range])
-    assert str(regex) == "(([a-z]|([0-9][_])))*[A-Z]"  # Extra parentheses needed for operator precedence
+    regex = Concatenation([star_part, upper])
+    assert str(regex) == "(([abc]|([012][_])))*[XYZ]"
 
 def test_special_characters_escape():
     """Test regex with special characters"""
-    # Test character range with special characters
-    special_range = CharacterRange('[', ']', RangeType.NEGATIVE)
-    assert str(special_range) == r"[^\[-\]]"
+    # Test negative character set with special characters
+    special_set = CharacterSet(['[', ']'], range_type=RangeType.NEGATIVE)
+    assert str(special_set) == r"[^\[\]]"
     
     # Test character set with special characters
-    special_set = CharacterSet(['$', '^', '*'])
-    regex = Concatenation([special_range, special_set])
-    assert str(regex) == r"[^\[-\]][\$\*\^]"
+    special_set2 = CharacterSet(['$', '^', '*'])
+    regex = Concatenation([special_set, special_set2])
+    assert str(regex) == r"[^\[\]][\$\^\*]"
     
     # Test Kleene star with special characters
     star_special = KleeneStar(special_set)

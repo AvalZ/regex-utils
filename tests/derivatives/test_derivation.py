@@ -1,6 +1,5 @@
 from regex_utils.derivatives.parser import (
     RegexExpr,
-    CharacterRange,
     CharacterSet,
     Concatenation,
     Alternation,
@@ -14,16 +13,16 @@ from regex_utils.derivatives.derivation_rules import derive
 def test_derive_concatenation_simple():
     """Test derivation of simple concatenation"""
     # Test ab with respect to 'a'
-    a = CharacterRange('a', 'a')
-    b = CharacterRange('b', 'b')
+    a = CharacterSet(['a'])
+    b = CharacterSet(['b'])
     concat = Concatenation([a, b])
     
     # a⁻¹(ab) = εb = b
     result = derive(concat, 'a')
     assert isinstance(result, Concatenation)
     assert len(result.expressions) == 1
-    assert isinstance(result.expressions[0], CharacterRange)
-    assert result.expressions[0].from_char == 'b'
+    assert isinstance(result.expressions[0], CharacterSet)
+    assert result.expressions[0].characters == ['b']
     
     # b⁻¹(ab) = ∅
     result = derive(concat, 'b')
@@ -32,8 +31,8 @@ def test_derive_concatenation_simple():
 def test_derive_concatenation_nullable():
     """Test derivation of concatenation with nullable first part"""
     # Test a*b with respect to 'b'
-    a_star = KleeneStar(CharacterRange('a', 'a'))
-    b = CharacterRange('b', 'b')
+    a_star = KleeneStar(CharacterSet(['a']))
+    b = CharacterSet(['b'])
     concat = Concatenation([a_star, b])
     
     # b⁻¹(a*b) = ε (because a* is nullable)
@@ -49,9 +48,9 @@ def test_derive_concatenation_nullable():
 def test_derive_concatenation_multiple():
     """Test derivation of concatenation with multiple parts"""
     # Test abc
-    a = CharacterRange('a', 'a')
-    b = CharacterRange('b', 'b')
-    c = CharacterRange('c', 'c')
+    a = CharacterSet(['a'])
+    b = CharacterSet(['b'])
+    c = CharacterSet(['c'])
     concat = Concatenation([a, b, c])
     
     # a⁻¹(abc) = bc
@@ -67,8 +66,8 @@ def test_derive_concatenation_multiple():
 def test_derive_alternation_simple():
     """Test derivation of simple alternation"""
     # Test a|b
-    a = CharacterRange('a', 'a')
-    b = CharacterRange('b', 'b')
+    a = CharacterSet(['a'])
+    b = CharacterSet(['b'])
     alt = Alternation([a, b])
     
     # a⁻¹(a|b) = ε
@@ -86,9 +85,9 @@ def test_derive_alternation_simple():
 def test_derive_alternation_multiple():
     """Test derivation of alternation with multiple parts"""
     # Test a|b|c
-    a = CharacterRange('a', 'a')
-    b = CharacterRange('b', 'b')
-    c = CharacterRange('c', 'c')
+    a = CharacterSet(['a'])
+    b = CharacterSet(['b'])
+    c = CharacterSet(['c'])
     alt = Alternation([a, b, c])
     
     # a⁻¹(a|b|c) = ε
@@ -102,9 +101,9 @@ def test_derive_alternation_multiple():
 def test_derive_complex():
     """Test derivation of complex expression"""
     # Test (a|b)c
-    a = CharacterRange('a', 'a')
-    b = CharacterRange('b', 'b')
-    c = CharacterRange('c', 'c')
+    a = CharacterSet(['a'])
+    b = CharacterSet(['b'])
+    c = CharacterSet(['c'])
     alt = Alternation([a, b])
     concat = Concatenation([alt, c])
     
@@ -112,15 +111,15 @@ def test_derive_complex():
     result = derive(concat, 'a')
     assert isinstance(result, Concatenation)
     assert len(result.expressions) == 1
-    assert isinstance(result.expressions[0], CharacterRange)
-    assert result.expressions[0].from_char == 'c'
+    assert isinstance(result.expressions[0], CharacterSet)
+    assert result.expressions[0].characters == ['c']
     
     # b⁻¹((a|b)c) = c
     result = derive(concat, 'b')
     assert isinstance(result, Concatenation)
     assert len(result.expressions) == 1
-    assert isinstance(result.expressions[0], CharacterRange)
-    assert result.expressions[0].from_char == 'c'
+    assert isinstance(result.expressions[0], CharacterSet)
+    assert result.expressions[0].characters == ['c']
     
     # c⁻¹((a|b)c) = ∅
     result = derive(concat, 'c')
