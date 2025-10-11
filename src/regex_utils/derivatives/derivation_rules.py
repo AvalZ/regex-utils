@@ -1,5 +1,7 @@
 from typing import Optional
-from regex_utils.derivatives.parser import CharacterSet, Concatenation, KleeneStar, RegexExpr
+from regex_utils.derivatives.components import CharacterSet, Concatenation
+from regex_utils.derivatives.components.regex_expr import RegexExpr
+from regex_utils.derivatives.components import KleeneStar
 
 """
 Derivation rules
