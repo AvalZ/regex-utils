@@ -1,5 +1,5 @@
 from typing import Optional
-from regex_utils.derivatives.parser import RegexExpr
+from regex_utils.derivatives.parser import CharacterSet, Concatenation, KleeneStar, RegexExpr
 
 """
 Derivation rules
@@ -25,4 +25,22 @@ def derive(regex: RegexExpr, char: str) -> RegexExpr:
     Returns:
         The derivative of the regex, which is another regex expression
     """
-    return regex.derive(char).normalize()
+
+    return regex.normalize().derive(char).normalize()
+
+if __name__ == "__main__":
+    concat = Concatenation([
+        KleeneStar(CharacterSet(['a'])),
+        CharacterSet(['b']),
+        CharacterSet(['c'])
+    ])
+
+    chars = []
+
+    while char := concat.generate():
+        print(f"Generated: {char}")
+        concat = derive(concat, char)
+        print(f"Derived: {concat}")
+        chars.append(char)
+    
+    print("Final string:", ''.join(chars))

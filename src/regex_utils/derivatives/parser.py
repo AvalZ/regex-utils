@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import List, Union
+from typing import List, Optional, Union
+import random
 
 # Characters that need to be escaped in regular expressions
 SPECIAL_CHARS = {']', '[', '^', '-', '\\', '/', '.', '$', '*', '+', '?', '(', ')', '{', '}', '|'}
+
+ALPHABET = set(chr(i) for i in range(256))
 
 
 class RangeType(StrEnum):
@@ -35,6 +38,10 @@ class RegexExpr(ABC):
         """Check if the regex expression can match the empty string"""
         pass
 
+    @abstractmethod
+    def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
+        pass
+
     def normalize(self):
         return self
 
@@ -59,6 +66,18 @@ class CharacterSet(RegexExpr):
     def is_nullable(self) -> bool:
         return False
 
+    def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
+        if self.range_type == RangeType.NEGATIVE:
+            alphabet = custom_alphabet if custom_alphabet else ALPHABET
+            valid_chars = list(alphabet - set(self.characters))
+            return random.choice(valid_chars) if valid_chars else None
+        elif self.range_type == RangeType.POSITIVE:
+            if not self.characters:
+                return None
+            return random.choice(list(self.characters))
+        else:
+            raise ValueError("Invalid RangeType")
+
     def __repr__(self):
         range_type = "^" if self.range_type == RangeType.NEGATIVE else ""
         escaped_chars = []
@@ -78,11 +97,14 @@ class Empty(RegexExpr):
         # Empty does not contain any characters
         return False
 
-    def derive(self, char: str) -> 'RegexExpr':
+    def derive(self, _: str) -> 'RegexExpr':
         return self
 
     def is_nullable(self) -> bool:
         return False
+
+    def generate(self) -> Optional[str]:
+        return None
 
     def __repr__(self) -> str:
         return "∅"
@@ -96,11 +118,14 @@ class Epsilon(RegexExpr):
         # Epsilon only contains the empty string
         return '' == char
 
-    def derive(self, char: str) -> 'RegexExpr':
+    def derive(self, _: str) -> 'RegexExpr':
         return Empty()
 
     def is_nullable(self) -> bool:
         return True
+
+    def generate(self) -> Optional[str]:
+        return ''
 
     def __repr__(self) -> str:
         return "ε"
@@ -117,23 +142,33 @@ class Concatenation(RegexExpr):
     def derive(self, char: str) -> 'RegexExpr':
         if not self.expressions:
             return Empty()
-        # TODO: add a normalization function that removes Concatenations with 1 expression only
-        if len(self.expressions) == 1:
-            return self.expressions[0].derive(char)
 
+        derived_expr = Alternation([])
         first_expr, *remaining_expr = self.expressions
 
-        if not first_expr.is_nullable():
-            return Concatenation([first_expr.derive(char), *remaining_expr] + remaining_expr)
+        while first_expr.is_nullable() and remaining_expr:
 
-        derived_expr = Alternation([
+            derived_expr.expressions.append(
+                Concatenation([first_expr.derive(char), *remaining_expr]),
+            )
+
+            first_expr, *remaining_expr = remaining_expr
+
+        derived_expr.expressions.append(
             Concatenation([first_expr.derive(char), *remaining_expr]),
-            Concatenation(remaining_expr).derive(char)
-        ])
-        return Concatenation([derived_expr] + remaining_expr) if remaining_expr else derived_expr
+        )
+
+        return derived_expr
 
     def is_nullable(self) -> bool:
         return all(expr.is_nullable() for expr in self.expressions)
+    
+    def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
+        if not self.expressions:
+            return ''
+        
+        # FIXME broken with Kleene star, should rely on derivative
+        return self.expressions[0].generate(custom_alphabet=custom_alphabet)
     
     def normalize(self) -> 'RegexExpr':
         # If there's only one expression, return it directly
@@ -190,42 +225,32 @@ class Alternation(RegexExpr):
         return any(expr.is_nullable() for expr in self.expressions)
 
     def normalize(self) -> 'RegexExpr':
-        if all(isinstance(expr, Epsilon) for expr in self.expressions):
-            return Epsilon()
-
-        # Remove Empty and Epsilon expressions
-        self.expressions = [expr for expr in self.expressions if not isinstance(expr, (Empty, Epsilon))]
-
         if not self.expressions:
-            return Empty()
+            return Epsilon()
         
         if len(self.expressions) == 1:
             return self.expressions[0].normalize()
         
-        normalized_expressions = self.expressions[:]
+        normalized_expressions = [expr.normalize() for expr in self.expressions]
+
         while any(isinstance(expr, Alternation) for expr in normalized_expressions):
-            normalized_expressions = []
+            normalized_expressions = [expr.normalize() for expr in normalized_expressions]
 
-            for expr in self.expressions:
-                expr.normalize()
-            
-                if isinstance(expr, Alternation):
-                    normalized_expressions.extend([e.normalize() for e in expr.expressions])
-                else:
-                    normalized_expressions.append(expr)
+        # Remove Empty and Epsilon expressions
+        normalized_expressions = [expr for expr in normalized_expressions if not isinstance(expr, (Empty))]
 
-            if all(isinstance(expr, Empty) for expr in normalized_expressions):
-                return Empty()
-            
-            if all(isinstance(expr, Epsilon) for expr in normalized_expressions):
-                return Epsilon()
-            
-            # Remove Empty and Epsilon expressions
-            normalized_expressions = [expr for expr in normalized_expressions if not isinstance(expr, (Empty, Epsilon))]
+        if all(isinstance(expr, Epsilon) for expr in normalized_expressions):
+            return Epsilon()
 
-            self.expressions = normalized_expressions
-
-        return Alternation(normalized_expressions)
+        return Alternation(normalized_expressions) if len(normalized_expressions) > 1 else normalized_expressions[0]
+    
+    def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
+        if not self.expressions:
+            return None
+        
+        # FIXME naive implementation, needs an abstract charset choice
+        chosen_expr = random.choice(self.expressions)
+        return chosen_expr.generate(custom_alphabet=custom_alphabet)
 
     def __repr__(self) -> str:
         parts = []
@@ -236,6 +261,16 @@ class Alternation(RegexExpr):
             else:
                 parts.append(str(expr))
         return f"({('|'.join(parts))})"
+    
+class Intersection(RegexExpr):
+    """Represents an intersection (&) of regex expressions"""
+    expressions: List[RegexExpr]
+
+    def __contains__(self, char: str) -> bool:
+        return all(char in expr for expr in self.expressions)
+
+    def is_nullable(self) -> bool:
+        return all(expr.is_nullable() for expr in self.expressions)
 
 @dataclass
 class KleeneStar(RegexExpr):
@@ -244,7 +279,6 @@ class KleeneStar(RegexExpr):
 
 
     def __contains__(self, char: str) -> bool:
-        # A Kleene star can generate the empty string, ma non un carattere specifico
         return char in self.expression
 
     def derive(self, char: str) -> 'RegexExpr':
@@ -255,6 +289,9 @@ class KleeneStar(RegexExpr):
 
     def is_nullable(self) -> bool:
         return True
+    
+    def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
+        return self.expression.generate(custom_alphabet=custom_alphabet)
 
     def __repr__(self) -> str:
         # KleeneStar has higher precedence than alternation but lower than grouping
