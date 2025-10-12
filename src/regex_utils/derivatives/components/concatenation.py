@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
+from regex_utils.derivatives.components.character_set import CharacterSet
 from regex_utils.derivatives.components.regex_expr import RegexExpr
 
 
@@ -109,3 +110,7 @@ class Concatenation(RegexExpr):
             else:
                 parts.append(str(expr))
         return "".join(parts)
+
+    def collapse(self) -> CharacterSet:
+        raise NotImplementedError
+

@@ -1,4 +1,4 @@
-from regex_utils.derivatives.parser import CharacterSet, RangeType
+from regex_utils.derivatives.components import CharacterSet, RangeType
 
 
 def test_character_set_repr_positive():
@@ -25,7 +25,7 @@ def test_character_set_repr_positive():
 
     # Test set with backslash
     set_escape = CharacterSet(["\\", "^"])
-    assert str(set_escape) == r"[\\^]"
+    assert str(set_escape) == r"[\\\^]"
 
 
 def test_character_set_repr_negative():
@@ -52,4 +52,4 @@ def test_character_set_repr_negative():
 
     # Test negative set with backslash
     set_not_escape = CharacterSet(["\\", "^"], RangeType.NEGATIVE)
-    assert str(set_not_escape) == r"[^\\^]"
+    assert str(set_not_escape) == r"[^\\\^]"

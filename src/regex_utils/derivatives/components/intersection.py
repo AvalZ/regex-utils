@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
+from regex_utils.derivatives.components.character_set import CharacterSet
 from regex_utils.derivatives.components.epsilon import Epsilon
 from regex_utils.derivatives.components.regex_expr import RegexExpr
 
@@ -31,3 +32,10 @@ class Intersection(RegexExpr):
 
     def generate(self, custom_alphabet: set[str] | None = None) -> str | None:
         raise NotImplementedError
+
+    def collapse(self) -> CharacterSet:
+        if not self.expressions:
+            return CharacterSet(set())
+
+        charsets_to_intersect = [expr.collapse() for expr in self.expressions]
+

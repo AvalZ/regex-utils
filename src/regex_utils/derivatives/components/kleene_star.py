@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from regex_utils.derivatives.components.character_set import CharacterSet
+
 from .alternation import Alternation
 from .concatenation import Concatenation
 from .empty import Empty
@@ -40,3 +42,7 @@ class KleeneStar(RegexExpr):
         )
         base = str(self.expression)
         return f"({base})*" if needs_parens else f"{base}*"
+
+    def collapse(self) -> CharacterSet:
+        raise NotImplementedError
+

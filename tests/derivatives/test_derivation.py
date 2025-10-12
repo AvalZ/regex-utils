@@ -1,5 +1,5 @@
 from regex_utils.derivatives.derivation_rules import derive
-from regex_utils.derivatives.parser import (Alternation, CharacterSet,
+from regex_utils.derivatives.components import (Alternation, CharacterSet,
                                             Concatenation, Empty, Epsilon,
                                             KleeneStar, RegexExpr)
 
@@ -17,9 +17,9 @@ def test_derive_concatenation_simple():
     assert isinstance(result, Concatenation)
     assert len(result.expressions) == 2
     assert isinstance(result.expressions[0], CharacterSet)
-    assert result.expressions[0].characters == ["b"]
+    assert result.expressions[0].characters == {"b"}
     assert isinstance(result.expressions[1], CharacterSet)
-    assert result.expressions[1].characters == ["c"]
+    assert result.expressions[1].characters == {"c"}
 
     # f⁻¹(abc) = ∅
     result = derive(concat, "f")
@@ -61,7 +61,7 @@ def test_derive_concatenation_multiple():
     result = derive(concat, "a")
     assert isinstance(result, Concatenation)
     assert len(result.expressions) == 2
-    assert str(result) == "[b][c]"
+    assert str(result) == "bc"
 
     # b⁻¹(abc) = ∅
     result = derive(concat, "b")

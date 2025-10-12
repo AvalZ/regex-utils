@@ -1,4 +1,4 @@
-from regex_utils.derivatives.parser import (Alternation, CharacterSet,
+from regex_utils.derivatives.components import (Alternation, CharacterSet,
                                             Concatenation, KleeneStar,
                                             RangeType, RegexExpr)
 
@@ -6,7 +6,7 @@ from regex_utils.derivatives.parser import (Alternation, CharacterSet,
 def test_character_set_single():
     """Test CharacterSet with single characters"""
     char_a = CharacterSet(["a"])
-    assert str(char_a) == "[a]"
+    assert str(char_a) == "a"
 
     # Test negative set with single character
     not_a = CharacterSet(["a"], range_type=RangeType.NEGATIVE)
@@ -48,7 +48,7 @@ def test_nested_expressions():
         [CharacterSet(["a", "b", "c"]), inner, CharacterSet(["X", "Y", "Z"])]
     )
 
-    assert str(outer) == "([abc]|([012][_])|[XYZ])"
+    assert str(outer) == "([abc]|([012]_)|[XYZ])"
 
 
 def test_kleene_star():
@@ -77,7 +77,7 @@ def test_complex_expression():
     upper = CharacterSet(["X", "Y", "Z"])
 
     regex = Concatenation([star_part, upper])
-    assert str(regex) == "(([abc]|([012][_])))*[XYZ]"
+    assert str(regex) == "(([abc]|([012]_)))*[XYZ]"
 
 
 def test_special_characters_escape():
@@ -89,8 +89,11 @@ def test_special_characters_escape():
     # Test character set with special characters
     special_set2 = CharacterSet(["$", "^", "*"])
     regex = Concatenation([special_set, special_set2])
-    assert str(regex) == r"[^\[\]][\$\^\*]"
+    assert str(regex) == r"[^\[\]][\$\*\^]"
 
     # Test Kleene star with special characters
     star_special = KleeneStar(special_set)
-    assert str(star_special) == r"[\$\*\^]*"
+    assert str(star_special) == r"[^\[\]]*"
+
+    star_special_2 = KleeneStar(special_set2)
+    assert str(star_special_2) == r"[\$\*\^]*"

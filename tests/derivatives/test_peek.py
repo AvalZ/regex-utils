@@ -1,6 +1,6 @@
-from regex_utils.derivatives.components import KleeneStar
-from regex_utils.derivatives.parser import (Alternation, CharacterSet,
-                                            Concatenation, Empty, Epsilon)
+from regex_utils.derivatives.components import (Alternation, CharacterSet,
+                                            Concatenation, Empty, Epsilon,
+                                            KleeneStar, Intersection)
 
 
 def test_simple_peek():
@@ -71,6 +71,15 @@ def test_peek_alternation_with_concatenations():
     assert len(peeked.expressions) == 2
     assert peeked.expressions[0] == a
     assert peeked.expressions[1] == c
+
+def test_peek_intersection():
+    a = CharacterSet({"a"})
+    bx = Concatenation([CharacterSet({"b"}), CharacterSet({"x"})])
+    c = CharacterSet({"c"})
+    d = CharacterSet({"d"})
+    intersection = Intersection([a, bx, c, d])
+    peeked = intersection.peek()
+    assert peeked == Intersection([a, CharacterSet({"b"}), c, d])
 
 
 def test_peek_complex_expression():

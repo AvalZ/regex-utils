@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from regex_utils.derivatives.components.character_set import CharacterSet
 from regex_utils.derivatives.components.regex_expr import RegexExpr
 
 
@@ -20,7 +21,10 @@ class Epsilon(RegexExpr):
         return True
 
     def generate(self) -> Optional[str]:
-        return ""
+        return ''
 
     def __repr__(self) -> str:
         return "ε"
+    
+    def collapse(self) -> CharacterSet:
+        return CharacterSet(set(''))  # Epsilon matches the empty string, so no characters

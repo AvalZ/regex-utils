@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from regex_utils.derivatives.components.character_set import CharacterSet
 from regex_utils.derivatives.components.regex_expr import RegexExpr
 
 
@@ -22,3 +23,6 @@ class Empty(RegexExpr):
 
     def __repr__(self) -> str:
         return "∅"
+    
+    def collapse(self) -> CharacterSet:
+        return CharacterSet(set())  # Empty matches no strings, so no characters

@@ -3,6 +3,7 @@ from typing import Optional
 
 from regex_utils.derivatives.components import (Alternation, Concatenation,
                                                 Empty)
+from regex_utils.derivatives.components.character_set import CharacterSet
 from regex_utils.derivatives.components.regex_expr import RegexExpr
 
 
@@ -17,6 +18,9 @@ class Negation(RegexExpr):
 
     def peek(self) -> RegexExpr:
         return Negation(self.expression.peek())
+    
+    def collapse(self) -> CharacterSet:
+        return self.expression.collapse().negate()
 
     def derive(self, char: str) -> "RegexExpr":
         d_expr = self.expression.derive(char)

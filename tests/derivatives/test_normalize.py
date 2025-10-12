@@ -1,4 +1,4 @@
-from regex_utils.derivatives.parser import (Alternation, CharacterSet,
+from regex_utils.derivatives.components import (Alternation, CharacterSet,
                                             Concatenation, Empty, Epsilon,
                                             KleeneStar, RangeType, RegexExpr)
 

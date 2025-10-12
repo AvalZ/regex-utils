@@ -1,34 +1,5 @@
 from abc import ABC, abstractmethod
-from enum import StrEnum
 from typing import Optional
-
-# Characters that need to be escaped in regular expressions
-SPECIAL_CHARS = {
-    "]",
-    "[",
-    "^",
-    "-",
-    "\\",
-    "/",
-    ".",
-    "$",
-    "*",
-    "+",
-    "?",
-    "(",
-    ")",
-    "{",
-    "}",
-    "|",
-}
-
-ALPHABET = set(chr(i) for i in range(256))
-
-
-class RangeType(StrEnum):
-    POSITIVE = "positive"
-    NEGATIVE = "negative"
-
 
 class RegexExpr(ABC):
     """Base abstract class for all regex expressions"""
@@ -58,3 +29,7 @@ class RegexExpr(ABC):
 
     def peek(self) -> "RegexExpr":
         return self
+
+    @abstractmethod
+    def collapse(self) -> 'CharacterSet':
+        pass

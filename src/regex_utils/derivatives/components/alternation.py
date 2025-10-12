@@ -2,8 +2,12 @@ import random
 from dataclasses import dataclass
 from typing import List, Optional
 
-from regex_utils.derivatives.components import (Concatenation, Empty, Epsilon,
-                                                RegexExpr)
+from regex_utils.derivatives.components.character_set import CharacterSet
+
+from .regex_expr import RegexExpr
+from .concatenation import Concatenation
+from .epsilon import Epsilon
+from .empty import Empty
 
 
 @dataclass
@@ -97,3 +101,7 @@ class Alternation(RegexExpr):
             else:
                 parts.append(str(expr))
         return f"({('|'.join(parts))})"
+
+    def collapse(self) -> CharacterSet:
+        raise NotImplementedError
+

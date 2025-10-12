@@ -5,7 +5,7 @@ imported from ``regex_utils.derivatives.components``.
 """
 
 from .alternation import Alternation
-from .character_set import CharacterSet
+from .character_set import CharacterSet, RangeType
 from .concatenation import Concatenation
 from .empty import Empty
 from .epsilon import Epsilon
@@ -17,6 +17,7 @@ __all__ = [
     "RegexExpr",
     "KleeneStar",
     "CharacterSet",
+	"RangeType",
     "Empty",
     "Epsilon",
     "Concatenation",

@@ -1,7 +1,7 @@
 import random
 
 from regex_utils.derivatives.derivation_rules import derive
-from regex_utils.derivatives.parser import (CharacterSet, Concatenation,
+from regex_utils.derivatives.components import (CharacterSet, Concatenation,
                                             Epsilon, KleeneStar, RangeType)
 
 
