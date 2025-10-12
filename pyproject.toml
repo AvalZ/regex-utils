@@ -21,6 +21,7 @@ graphviz = "*"
 more_itertools = "*"
 pytest = "^8.3.4"
 black = "^24.10.0"
+isort = "^7.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

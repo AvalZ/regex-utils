@@ -6,16 +6,13 @@ maintain backwards compatibility we import and re-export the public names
 here so existing imports continue to work.
 """
 
-from regex_utils.derivatives.components.regex_expr import SPECIAL_CHARS, ALPHABET, RangeType, RegexExpr
-from regex_utils.derivatives.components import (
-    CharacterSet,
-    Empty,
-    Epsilon,
-    Concatenation,
-    Alternation,
-    Intersection,
-    KleeneStar,
-)
+from regex_utils.derivatives.components import (Alternation, CharacterSet,
+                                                Concatenation, Empty, Epsilon,
+                                                Intersection, KleeneStar,
+                                                RegexExpr)
+from regex_utils.derivatives.components.regex_expr import (ALPHABET,
+                                                           SPECIAL_CHARS,
+                                                           RangeType)
 
 __all__ = [
     "SPECIAL_CHARS",

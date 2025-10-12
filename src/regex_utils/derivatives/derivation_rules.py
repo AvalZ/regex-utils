@@ -1,7 +1,8 @@
 from typing import Optional
-from regex_utils.derivatives.components import CharacterSet, Concatenation
+
+from regex_utils.derivatives.components import (CharacterSet, Concatenation,
+                                                KleeneStar)
 from regex_utils.derivatives.components.regex_expr import RegexExpr
-from regex_utils.derivatives.components import KleeneStar
 
 """
 Derivation rules
@@ -17,25 +18,25 @@ a-1(R U S)	= (a-1R) U (a-1S)
 a-1(¬R)	= ¬(a-1R)
 """
 
+
 def derive(regex: RegexExpr, char: str) -> RegexExpr:
     """Compute the derivative of a regex with respect to a character.
-    
+
     Args:
         regex: The regex expression to derive
         char: The character to derive with respect to
-    
+
     Returns:
         The derivative of the regex, which is another regex expression
     """
 
     return regex.normalize().derive(char).normalize()
 
+
 if __name__ == "__main__":
-    concat = Concatenation([
-        KleeneStar(CharacterSet(['a'])),
-        CharacterSet(['b']),
-        CharacterSet(['c'])
-    ])
+    concat = Concatenation(
+        [KleeneStar(CharacterSet(["a"])), CharacterSet(["b"]), CharacterSet(["c"])]
+    )
 
     chars = []
 
@@ -44,5 +45,5 @@ if __name__ == "__main__":
         concat = derive(concat, char)
         print(f"Derived: {concat}")
         chars.append(char)
-    
-    print("Final string:", ''.join(chars))
+
+    print("Final string:", "".join(chars))

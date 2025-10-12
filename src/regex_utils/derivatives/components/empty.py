@@ -11,7 +11,7 @@ class Empty(RegexExpr):
     def __contains__(self, _: str) -> bool:
         return False
 
-    def derive(self, _: str) -> 'RegexExpr':
+    def derive(self, _: str) -> "RegexExpr":
         return self
 
     def is_nullable(self) -> bool:

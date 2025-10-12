@@ -1,24 +1,24 @@
+import random
 from dataclasses import dataclass
 from typing import List, Optional
-import random
 
-from regex_utils.derivatives.components.concatenation import Concatenation
-from regex_utils.derivatives.components.epsilon import Epsilon
-from regex_utils.derivatives.components.regex_expr import RegexExpr
+from regex_utils.derivatives.components import (Concatenation, Empty, Epsilon,
+                                                RegexExpr)
 
 
 @dataclass
 class Alternation(RegexExpr):
     """Represents a union (|) of regex expressions"""
+
     expressions: List[RegexExpr]
 
     def __contains__(self, char: str) -> bool:
         return any(char in expr for expr in self.expressions)
-    
-    def peek(self) -> 'RegexExpr':
+
+    def peek(self) -> "RegexExpr":
         if not self.expressions:
             return Epsilon()
-        
+
         peeked_expr = Alternation([])
 
         for expr in self.expressions:
@@ -26,10 +26,13 @@ class Alternation(RegexExpr):
 
         return peeked_expr.normalize()
 
-    def derive(self, char: str) -> 'RegexExpr':
+    def derive(self, char: str) -> "RegexExpr":
         from .empty import Empty
+
         derived_expressions = [expr.derive(char) for expr in self.expressions]
-        non_empty_expressions = [d for d in derived_expressions if not isinstance(d, Empty)]
+        non_empty_expressions = [
+            d for d in derived_expressions if not isinstance(d, Empty)
+        ]
         if not non_empty_expressions:
             return Empty()
         elif len(non_empty_expressions) == 1:
@@ -39,10 +42,7 @@ class Alternation(RegexExpr):
     def is_nullable(self) -> bool:
         return any(expr.is_nullable() for expr in self.expressions)
 
-    def normalize(self) -> 'RegexExpr':
-        from .epsilon import Epsilon
-        from .empty import Empty
-
+    def normalize(self) -> "RegexExpr":
         if not self.expressions:
             return Epsilon()
 
@@ -59,7 +59,9 @@ class Alternation(RegexExpr):
                 normalized_expressions.append(e)
 
         # Remove Empty expressions
-        normalized_expressions = [expr for expr in normalized_expressions if not isinstance(expr, Empty)]
+        normalized_expressions = [
+            expr for expr in normalized_expressions if not isinstance(expr, Empty)
+        ]
 
         if not normalized_expressions:
             return Epsilon()
@@ -69,7 +71,9 @@ class Alternation(RegexExpr):
             return Epsilon()
 
         # If there is at least one non-Epsilon expression, drop any Epsilon entries
-        non_eps = [expr for expr in normalized_expressions if not isinstance(expr, Epsilon)]
+        non_eps = [
+            expr for expr in normalized_expressions if not isinstance(expr, Epsilon)
+        ]
         if non_eps:
             normalized_expressions = non_eps
 
@@ -77,11 +81,11 @@ class Alternation(RegexExpr):
             return normalized_expressions[0]
 
         return Alternation(normalized_expressions)
-    
+
     def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
         if not self.expressions:
             return None
-        
+
         chosen_expr = random.choice(self.expressions)
         return chosen_expr.generate(custom_alphabet=custom_alphabet)
 

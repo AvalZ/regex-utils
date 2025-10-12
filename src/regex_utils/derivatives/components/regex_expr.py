@@ -3,7 +3,24 @@ from enum import StrEnum
 from typing import Optional
 
 # Characters that need to be escaped in regular expressions
-SPECIAL_CHARS = {']', '[', '^', '-', '\\', '/', '.', '$', '*', '+', '?', '(', ')', '{', '}', '|'}
+SPECIAL_CHARS = {
+    "]",
+    "[",
+    "^",
+    "-",
+    "\\",
+    "/",
+    ".",
+    "$",
+    "*",
+    "+",
+    "?",
+    "(",
+    ")",
+    "{",
+    "}",
+    "|",
+}
 
 ALPHABET = set(chr(i) for i in range(256))
 
@@ -25,7 +42,7 @@ class RegexExpr(ABC):
         pass
 
     @abstractmethod
-    def derive(self, char: str) -> 'RegexExpr':
+    def derive(self, char: str) -> "RegexExpr":
         pass
 
     @abstractmethod
@@ -39,5 +56,5 @@ class RegexExpr(ABC):
     def normalize(self):
         return self
 
-    def peek(self) -> 'RegexExpr':
+    def peek(self) -> "RegexExpr":
         return self

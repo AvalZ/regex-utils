@@ -1,8 +1,9 @@
 import random
 
-from .transition import Direction, Transition
-from .state import State, SynchronizedState
 from regex_utils.utils import ALPHABET
+
+from .state import State, SynchronizedState
+from .transition import Direction, Transition
 
 
 class DFA:
@@ -117,10 +118,10 @@ class DFA:
                 print(f"\t {t}")
             for t in sorted(s.get_transitions(), key=lambda x: x.symbol):
                 print(f"\t\t -{t}")
-    
+
     def get_equivalent_state(self, state):
         return next((s for s in self.states if s == state), None)
-    
+
     def negate(self):
         """
         Negate the DFA

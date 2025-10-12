@@ -1,22 +1,25 @@
 from dataclasses import dataclass
 from typing import Optional
-from regex_utils.derivatives.components import Alternation, Concatenation, Empty
-from regex_utils.derivatives.components.regex_expr import RegexExpr
+
+from .alternation import Alternation
+from .concatenation import Concatenation
+from .empty import Empty
+from .regex_expr import RegexExpr
 
 
 @dataclass
 class KleeneStar(RegexExpr):
     """Represents a Kleene star (*) operation"""
-    expression: RegexExpr
 
+    expression: RegexExpr
 
     def __contains__(self, char: str) -> bool:
         return char in self.expression
-    
+
     def peek(self) -> RegexExpr:
         return self.expression.peek()
 
-    def derive(self, char: str) -> 'RegexExpr':
+    def derive(self, char: str) -> "RegexExpr":
         d_expr = self.expression.derive(char)
         if isinstance(d_expr, Empty):
             return Empty()
@@ -24,14 +27,16 @@ class KleeneStar(RegexExpr):
 
     def is_nullable(self) -> bool:
         return True
-    
+
     def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
         return self.expression.generate(custom_alphabet=custom_alphabet)
 
     def __repr__(self) -> str:
         # KleeneStar has higher precedence than alternation but lower than grouping
         # We need parentheses for alternation or concatenation with multiple elements
-        needs_parens = (isinstance(self.expression, Alternation) or 
-                       (isinstance(self.expression, Concatenation) and len(self.expression.expressions) > 1))
+        needs_parens = isinstance(self.expression, Alternation) or (
+            isinstance(self.expression, Concatenation)
+            and len(self.expression.expressions) > 1
+        )
         base = str(self.expression)
         return f"({base})*" if needs_parens else f"{base}*"

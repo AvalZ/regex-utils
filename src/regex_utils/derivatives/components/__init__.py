@@ -4,20 +4,22 @@ Export frequently used component classes from their modules so they can be
 imported from ``regex_utils.derivatives.components``.
 """
 
+from .alternation import Alternation
 from .character_set import CharacterSet
+from .concatenation import Concatenation
 from .empty import Empty
 from .epsilon import Epsilon
-from .concatenation import Concatenation
-from .alternation import Alternation
 from .intersection import Intersection
 from .kleene_star import KleeneStar
+from .regex_expr import RegexExpr
 
 __all__ = [
-	"KleeneStar",
-	"CharacterSet",
-	"Empty",
-	"Epsilon",
-	"Concatenation",
-	"Alternation",
-	"Intersection",
+    "RegexExpr",
+    "KleeneStar",
+    "CharacterSet",
+    "Empty",
+    "Epsilon",
+    "Concatenation",
+    "Alternation",
+    "Intersection",
 ]
