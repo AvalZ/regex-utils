@@ -124,3 +124,19 @@ class CharacterSet(RegexExpr):
         )
         return CharacterSet(self.characters, new_range_type)
 
+    def get_explicit_charset(self, custom_alphabet: Optional[set[str]] = None) -> 'CharacterSet':
+        """Return a new CharacterSet that explicitly lists all characters it matches.
+
+        For positive character sets, this is the same as the original set.
+        For negative character sets, this is the set of all characters in the
+        alphabet (either custom_alphabet or full ASCII if none provided) that are not in the original set.
+        """
+        if self.range_type == RangeType.POSITIVE:
+            return self
+
+        alphabet = custom_alphabet if custom_alphabet else ALPHABET
+        new_characters = alphabet - set(self.characters)
+
+        return CharacterSet(
+            new_characters,
+        )

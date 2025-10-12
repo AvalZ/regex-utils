@@ -37,5 +37,8 @@ class Intersection(RegexExpr):
         if not self.expressions:
             return CharacterSet(set())
 
-        charsets_to_intersect = [expr.collapse() for expr in self.expressions]
+        # FIXME get_explicit_charset is never used with a custom_alphabet here
+        characters = [expr.collapse().get_explicit_charset().characters for expr in self.expressions]
+        intersected_chars = set.intersection(*characters)
 
+        return CharacterSet(intersected_chars)
