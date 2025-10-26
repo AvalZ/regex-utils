@@ -30,9 +30,6 @@ class KleeneStar(RegexExpr):
     def is_nullable(self) -> bool:
         return True
 
-    def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
-        return self.expression.generate(custom_alphabet=custom_alphabet)
-
     def __repr__(self) -> str:
         # KleeneStar has higher precedence than alternation but lower than grouping
         # We need parentheses for alternation or concatenation with multiple elements

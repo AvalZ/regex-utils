@@ -1,5 +1,6 @@
 import pytest
 
+from regex_utils.derivatives.components.alternation import Alternation
 from regex_utils.derivatives.components.character_set import CharacterSet, RangeType
 from regex_utils.derivatives.components.concatenation import Concatenation
 from regex_utils.derivatives.components.intersection import Intersection
@@ -61,5 +62,28 @@ def test_collapse_intersection_with_negative_charset_only():
 
     collapsed = intersection.collapse()
     expected = CharacterSet({"a", "b"}, range_type=RangeType.NEGATIVE).get_explicit_charset()
+
+    assert collapsed == expected
+
+def test_collapse_alternation():
+    a = CharacterSet({"a"})
+    b = CharacterSet({"b"})
+    alternation = Alternation([a, b])
+
+    collapsed = alternation.collapse()
+    expected = CharacterSet({"a", "b"})
+
+    assert collapsed == expected
+
+def test_collapse_alternation_with_negative_charset():
+
+    custom_alphabet = set("abcdefghijklmnopqrstuvwxyz")
+
+    a = CharacterSet({"a"})
+    b = CharacterSet({"b"}, range_type=RangeType.NEGATIVE)
+    alternation = Alternation([a, b])
+
+    collapsed = alternation.collapse(custom_alphabet=custom_alphabet)
+    expected = CharacterSet(custom_alphabet - {"b"})
 
     assert collapsed == expected

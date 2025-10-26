@@ -20,9 +20,8 @@ class RegexExpr(ABC):
     def is_nullable(self) -> bool:
         pass
 
-    @abstractmethod
     def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
-        pass
+        return self.peek().collapse().generate(custom_alphabet)
 
     def normalize(self):
         return self
@@ -31,5 +30,5 @@ class RegexExpr(ABC):
         return self
 
     @abstractmethod
-    def collapse(self) -> 'CharacterSet':
+    def collapse(self, custom_alphabet: set[str] | None = None) -> 'CharacterSet':
         pass

@@ -86,13 +86,6 @@ class Alternation(RegexExpr):
 
         return Alternation(normalized_expressions)
 
-    def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
-        if not self.expressions:
-            return None
-
-        chosen_expr = random.choice(self.expressions)
-        return chosen_expr.generate(custom_alphabet=custom_alphabet)
-
     def __repr__(self) -> str:
         parts = []
         for expr in self.expressions:
@@ -102,6 +95,17 @@ class Alternation(RegexExpr):
                 parts.append(str(expr))
         return f"({('|'.join(parts))})"
 
-    def collapse(self) -> CharacterSet:
-        raise NotImplementedError
+    def collapse(self, custom_alphabet: set[str] | None = None) -> CharacterSet:
+        if not self.expressions:
+            return CharacterSet(set())
+
+        # Ensure any negative character sets are expanded to explicit positive
+        # character lists before taking the union (consistent with Intersection)
+        characters = [
+            expr.collapse(custom_alphabet=custom_alphabet).get_explicit_charset().characters for expr in self.expressions
+        ]
+
+        union_character_sets = set.union(*characters) if characters else set()
+
+        return CharacterSet(union_character_sets)
 

@@ -30,9 +30,6 @@ class Intersection(RegexExpr):
     def derive(self, char: str) -> RegexExpr:
         raise NotImplementedError
 
-    def generate(self, custom_alphabet: set[str] | None = None) -> str | None:
-        raise NotImplementedError
-
     def collapse(self) -> CharacterSet:
         if not self.expressions:
             return CharacterSet(set())

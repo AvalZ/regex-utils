@@ -112,9 +112,9 @@ class CharacterSet(RegexExpr):
             and set(self.characters) == set(value.characters)
         )
 
-    def collapse(self) -> 'CharacterSet':
-        return self
-    
+    def collapse(self, custom_alphabet: set[str] | None = None) -> 'CharacterSet':
+        return self.get_explicit_charset(custom_alphabet=custom_alphabet) 
+
     def negate(self) -> 'CharacterSet':
         """Return a new CharacterSet that is the negation of this one."""
         new_range_type = (
@@ -132,6 +132,7 @@ class CharacterSet(RegexExpr):
         alphabet (either custom_alphabet or full ASCII if none provided) that are not in the original set.
         """
         if self.range_type == RangeType.POSITIVE:
+            # FIXME: does this one need an intersection with custom_alphabet?
             return self
 
         alphabet = custom_alphabet if custom_alphabet else ALPHABET
