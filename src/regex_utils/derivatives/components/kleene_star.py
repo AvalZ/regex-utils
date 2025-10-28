@@ -41,5 +41,6 @@ class KleeneStar(RegexExpr):
         return f"({base})*" if needs_parens else f"{base}*"
 
     def collapse(self) -> CharacterSet:
+        # Peek should never include a Kleene star, so collapse is not defined here
         raise NotImplementedError
 

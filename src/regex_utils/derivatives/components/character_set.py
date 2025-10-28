@@ -76,8 +76,7 @@ class CharacterSet(RegexExpr):
     def generate(self, custom_alphabet: Optional[set[str]] = None) -> Optional[str]:
         chars = set(self.characters)
         if self.range_type == RangeType.NEGATIVE:
-            alphabet = custom_alphabet if custom_alphabet else ALPHABET
-            valid_chars = list(alphabet - chars)
+            valid_chars = self.get_explicit_charset(custom_alphabet).characters
             return random.choice(sorted(valid_chars)) if valid_chars else None
         elif self.range_type == RangeType.POSITIVE:
             if not chars:

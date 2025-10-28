@@ -1,8 +1,7 @@
 from typing import Optional
 
-from regex_utils.derivatives.components import (CharacterSet, Concatenation,
-                                                KleeneStar)
-from regex_utils.derivatives.components.regex_expr import RegexExpr
+from regex_utils.derivatives.components import (CharacterSet, Concatenation, KleeneStar, RegexExpr)
+from regex_utils.derivatives.parser import RegexParser
 
 """
 Derivation rules
@@ -31,6 +30,19 @@ def derive(regex: RegexExpr, char: str) -> RegexExpr:
     """
 
     return regex.normalize().derive(char).normalize()
+
+def parse(regex_str: str) -> RegexExpr:
+    """Parse a regex string into a RegexExpr object.
+
+    Args:
+        regex_str: The regex string to parse
+
+    Returns:
+        The parsed RegexExpr object
+    """
+
+    parser = RegexParser(regex_str)
+    return parser.parse()
 
 
 if __name__ == "__main__":
